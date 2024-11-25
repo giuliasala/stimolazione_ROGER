@@ -61,22 +61,22 @@ def calibrate_rehamove(port_name, channel):
             # Interacting with user
             # In this code, when the key is pressed the value is stored. This means the values can be overwritten
             
-            if keyboard.is_pressed('j'):
+            if keyboard.is_pressed('j') and thresholds['tingling_current'] is None:
                 thresholds['tingling_current'] = current
                 thresholds['tingling_pw'] = pw
                 print(f"Recorded tingling threshold: {current} mA, {pw} µs")
 
-            if keyboard.is_pressed('k'):
+            if keyboard.is_pressed('k') and thresholds['movement_current'] is None:
                 thresholds['movement_current'] = current
                 thresholds['movement_pw'] = pw
                 print(f"Recorded movement threshold: {current} mA, {pw} µs")
                 
-            if keyboard.is_pressed('l'):
+            if keyboard.is_pressed('l') and thresholds['full_range_current'] is None:
                 thresholds['full_range_current'] = current
                 thresholds['full_range_pw'] = pw
                 print(f"Recorded full range of motion: {current} mA, {pw} µs")
             
-            if keyboard.is_pressed('p'):
+            if keyboard.is_pressed('p') and thresholds['pain_current'] is None:
                 thresholds['pain_current'] = current
                 thresholds['pain_pw'] = pw
                 print(f"Recorded pain threshold: {current} mA, {pw} µs")
@@ -87,6 +87,11 @@ def calibrate_rehamove(port_name, channel):
             # Increment current and pulse width
             current += 0.5
             pw += 5
+
+        # If pain was detected before recording the full range, manually assign it as the value for pain - 1 iteration
+        if thresholds['full_range_current'] is None:
+            thresholds['full_range_current'] = thresholds['pain_current'] - 0.5
+            thresholds['full_range_pw'] = thresholds['pain_pw'] - 5
 
         # Save the data in a csv file
         print("Saving calibration data...")
