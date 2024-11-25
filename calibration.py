@@ -1,7 +1,7 @@
 from rehamove import *
 import csv
 import time
-import sys
+import keyboard
 
 def calibrate_rehamove(port_name, channel):
 
@@ -45,6 +45,8 @@ def calibrate_rehamove(port_name, channel):
             'pain_pw': None
         }
 
+        print("Press 'j' when tingling is detected, 'k' for movement, 'l' for full range, 'p' for pain.")
+
         while current <= max_current and pw <= max_pw:
             
             print(f"Testing for: {current} mA and {pw} us")
@@ -57,38 +59,27 @@ def calibrate_rehamove(port_name, channel):
                 continue
             
             # Interacting with user
-            try:
-                if thresholds['tingling_current'] is None:
-                    tingling = input(f"Tingling detected at {current} mA, {pw} µs? (y/n): ").strip().lower() == 'y'
-                    if tingling:
-                        thresholds['tingling_current'] = current
-                        thresholds['tingling_pw'] = pw
-                        print(f"Recorded tingling threshold: {current} mA, {pw} µs")
+            # In this code, when the key is pressed the value is stored. This means the values can be overwritten
+            
+            if keyboard.is_pressed('j'):
+                thresholds['tingling_current'] = current
+                thresholds['tingling_pw'] = pw
+                print(f"Recorded tingling threshold: {current} mA, {pw} µs")
 
-                if thresholds['movement_current'] is None and tingling:
-                    movement = input(f"Movement detected at {current} mA, {pw} µs? (y/n): ").strip().lower() == 'y'
-                    if movement:
-                        thresholds['movement_current'] = current
-                        thresholds['movement_pw'] = pw
-                        print(f"Recorded movement threshold: {current} mA, {pw} µs")
-
-                if thresholds['full_range_current'] is None and thresholds['movement_current'] is not None:
-                    full_range = input(f"Full range of motion at {current} mA, {pw} µs? (y/n): ").strip().lower() == 'y'
-                    if full_range:
-                        thresholds['full_range_current'] = current
-                        thresholds['full_range_pw'] = pw
-                        print(f"Recorded full range of motion: {current} mA, {pw} µs")
+            if keyboard.is_pressed('k'):
+                thresholds['movement_current'] = current
+                thresholds['movement_pw'] = pw
+                print(f"Recorded movement threshold: {current} mA, {pw} µs")
                 
-                if thresholds['pain_current'] is None and thresholds['movement_current'] is not None:
-                    pain = input(f"Pain reported at {current} mA, {pw} µs? (y/n): ").strip().lower() == 'y'
-                    if pain:
-                        thresholds['pain_current'] = current
-                        thresholds['pain_pw'] = pw
-                        print(f"Recorded pain threshold: {current} mA, {pw} µs")
-
-            except KeyboardInterrupt:
-                print("\nCalibration interrupted by user")
-                sys.exit(1)
+            if keyboard.is_pressed('l'):
+                thresholds['full_range_current'] = current
+                thresholds['full_range_pw'] = pw
+                print(f"Recorded full range of motion: {current} mA, {pw} µs")
+            
+            if keyboard.is_pressed('p'):
+                thresholds['pain_current'] = current
+                thresholds['pain_pw'] = pw
+                print(f"Recorded pain threshold: {current} mA, {pw} µs")
 
             if thresholds['pain_current'] is not None:
                 break
