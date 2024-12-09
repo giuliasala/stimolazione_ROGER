@@ -24,15 +24,15 @@ def calibrate_rehamove(port_name, channel):
         r.change_mode(1)     # Change to mid level (0-low, 1-mid)
 
         # Set frequency and duration of contraction
-        freq = 30    # Hz
+        freq = 40    # Hz
         period = 1/freq * 1000    # ms
-        total_time = 1500     # ms
+        total_time = 1.5     # s
         
         # Set initial parameters
         current = 0     # mA
-        pw = 150     # us
-        max_current = 25
-        max_pw = 400
+        pw = 180     # us
+        max_current = 30
+        max_pw = 480
 
         thresholds = {
             'tingling_current': None,
@@ -48,12 +48,12 @@ def calibrate_rehamove(port_name, channel):
         print("Press 'j' when tingling is detected, 'k' for movement, 'l' for full range, 'p' for pain.")
 
         while current <= max_current and pw <= max_pw:
-            
-            print(f"Testing for: {current} mA and {pw} us")
 
             try:
                 r.set_pulse(current, pw)
-                r.run(channel, period, total_time)
+                r.start(channel, period)
+                time.sleep(total_time)
+
             except Exception as e:
                 print(f"Error running pulse: {e}")
                 continue
@@ -64,29 +64,29 @@ def calibrate_rehamove(port_name, channel):
             if keyboard.is_pressed('j') and thresholds['tingling_current'] is None:
                 thresholds['tingling_current'] = current
                 thresholds['tingling_pw'] = pw
-                print(f"Recorded tingling threshold: {current} mA, {pw} µs")
 
-            if keyboard.is_pressed('k') and thresholds['movement_current'] is None:
+            elif keyboard.is_pressed('k') and thresholds['movement_current'] is None:
                 thresholds['movement_current'] = current
                 thresholds['movement_pw'] = pw
-                print(f"Recorded movement threshold: {current} mA, {pw} µs")
                 
-            if keyboard.is_pressed('l') and thresholds['full_range_current'] is None:
+            elif keyboard.is_pressed('l') and thresholds['full_range_current'] is None:
                 thresholds['full_range_current'] = current
                 thresholds['full_range_pw'] = pw
-                print(f"Recorded full range of motion: {current} mA, {pw} µs")
             
-            if keyboard.is_pressed('p') and thresholds['pain_current'] is None:
+            elif keyboard.is_pressed('p') and thresholds['pain_current'] is None:
                 thresholds['pain_current'] = current
                 thresholds['pain_pw'] = pw
-                print(f"Recorded pain threshold: {current} mA, {pw} µs")
-
+                
             if thresholds['pain_current'] is not None:
                 break
+
+            r.update()
 
             # Increment current and pulse width
             current += 0.5
             pw += 5
+
+        r.end()
 
         # If pain was detected before recording the full range, manually assign it as the value for pain - 1 iteration
         if thresholds['full_range_current'] is None:
