@@ -28,26 +28,21 @@ def calibrate_rehamove(port_name, channel):
         period = 1/freq * 1000    # ms
         total_time = 1.5     # s
         
-        # Set initial parameters
+        # Set parameters
+        pw = 400     # us
         current = 0     # mA
-        pw = 180     # us
         max_current = 30
-        max_pw = 480
 
         thresholds = {
             'tingling_current': None,
-            'tingling_pw': None,
             'movement_current': None,
-            'movement_pw': None,
             'full_range_current': None,
-            'full_range_pw': None,
             'pain_current': None,
-            'pain_pw': None
         }
 
         print("Press 'j' when tingling is detected, 'k' for movement, 'l' for full range, 'p' for pain.")
 
-        while current <= max_current and pw <= max_pw:
+        while current <= max_current:
 
             try:
                 r.set_pulse(current, pw)
@@ -59,23 +54,18 @@ def calibrate_rehamove(port_name, channel):
                 continue
             
             # Interacting with user
-            # In this code, when the key is pressed the value is stored. This means the values can be overwritten
             
             if keyboard.is_pressed('j') and thresholds['tingling_current'] is None:
                 thresholds['tingling_current'] = current
-                thresholds['tingling_pw'] = pw
 
             elif keyboard.is_pressed('k') and thresholds['movement_current'] is None:
                 thresholds['movement_current'] = current
-                thresholds['movement_pw'] = pw
                 
             elif keyboard.is_pressed('l') and thresholds['full_range_current'] is None:
                 thresholds['full_range_current'] = current
-                thresholds['full_range_pw'] = pw
             
             elif keyboard.is_pressed('p') and thresholds['pain_current'] is None:
                 thresholds['pain_current'] = current
-                thresholds['pain_pw'] = pw
                 
             if thresholds['pain_current'] is not None:
                 break
@@ -84,14 +74,12 @@ def calibrate_rehamove(port_name, channel):
 
             # Increment current and pulse width
             current += 0.5
-            pw += 5
 
         r.end()
 
         # If pain was detected before recording the full range, manually assign it as the value for pain - 1 iteration
         if thresholds['full_range_current'] is None:
             thresholds['full_range_current'] = thresholds['pain_current'] - 0.5
-            thresholds['full_range_pw'] = thresholds['pain_pw'] - 5
 
         # Save the data in a csv file
         print("Saving calibration data...")
