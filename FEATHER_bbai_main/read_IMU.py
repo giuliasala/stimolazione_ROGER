@@ -91,9 +91,9 @@ class readImuLoop(threading.Thread):
 def calibrate():        
     
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid?").lower().strip()
-    duration = input("Duration:")
+    duration = input("Duration (number):")
 
-    readImuThread = readImuLoop("Read IMU", system_state, imu, muscle, True)
+    readImuThread = readImuLoop("Read IMU", system_state, imu, muscle, True, duration)
     readImuThread.start()
 
 if __name__ == "__main__":
