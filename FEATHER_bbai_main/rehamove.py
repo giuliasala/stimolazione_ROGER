@@ -1,4 +1,4 @@
-import rehamovelib
+import rehamovelib as rehamovelib
 
 class Rehamove:
 

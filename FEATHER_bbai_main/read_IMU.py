@@ -1,9 +1,10 @@
-from tdu import Imu
 import numpy as np
 import threading
 import time
 
 import utils
+
+from tdu import Imu
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
@@ -76,7 +77,7 @@ class readImuLoop(threading.Thread):
 
         if self.calibration_mode:
             max_sh_el_deg = np.degrees(self.system_state.max_sh_el)
-            max_sh_el_deg = np.minimum(max_sh_el_deg, 130.0*np.pi/180.0) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
+            max_sh_el_deg = np.minimum(max_sh_el_deg, 130.0) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
             
             if self.muscle == "a":
                 filename = "anterior_calibration_data.json"
@@ -90,8 +91,9 @@ class readImuLoop(threading.Thread):
             
 def calibrate():        
     
-    muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid?").lower().strip()
-    duration = input("Duration (number):")
+    muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
+    duration_str = input("Duration (number): ")
+    duration = int(duration_str)
 
     readImuThread = readImuLoop("Read IMU", system_state, imu, muscle, True, duration)
     readImuThread.start()
@@ -100,7 +102,7 @@ if __name__ == "__main__":
 
     system_state = systemState()
     imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
-    calibration_mode = input("Start calibration? (y/n)").lower().strip()
+    calibration_mode = input("Start calibration? (y/n) ").lower().strip()
     
     if calibration_mode == "y":
         calibrate()

@@ -1,4 +1,5 @@
 from rehamove import *
+
 import time
 import keyboard
 
@@ -15,7 +16,7 @@ def calibrate_rehamove(port_name, channel):
         while r.rehamove is None:
             print("Rehamove device not detected. Retrying...")
             time.sleep(0.5)
-            r = Rehamove(port_name)
+            r = Rehamove(port_name) # Windows
             retries -= 1
         if r.rehamove is None:
             raise Exception("Failed to connect to Rehamove device after multiple attempts.")
@@ -27,7 +28,7 @@ def calibrate_rehamove(port_name, channel):
         # Set frequency and duration of contraction
         freq = 40    # Hz
         period = 1/freq * 1000    # ms
-        total_time = 0.5     # s
+        duration = 0.5     # s
         
         # Set parameters
         pw = 400     # us
@@ -48,7 +49,7 @@ def calibrate_rehamove(port_name, channel):
             try:
                 r.set_pulse(current, pw)
                 r.start(channel, period)
-                time.sleep(total_time)
+                time.sleep(duration)
 
             except Exception as e:
                 print(f"Error running pulse: {e}")
