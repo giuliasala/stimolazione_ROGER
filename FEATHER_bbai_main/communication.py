@@ -1,23 +1,23 @@
 #!/usr/bin/python3
 import can
-import tmotor_can_utils as tcan
-from can.interface import Bus
-from can import Message
+#import tmotor_can_utils as tcan
+#from can.interface import Bus
+#from can import Message
 
-import osc_decoder
+#import osc_decoder
 import socket
 
-import busio
-import board
-import adafruit_ads1x15.ads1115 as ADS
-from adafruit_ads1x15.analog_in import AnalogIn
+#import busio
+#import board
+#import adafruit_ads1x15.ads1115 as ADS
+#from adafruit_ads1x15.analog_in import AnalogIn
 
 import numpy as np
 
 import binascii
 
 from pythonosc import udp_client
-
+'''
 class motorCommunication():
     def __init__(self, CAN_ID, model):
         if model == "AK60_6":
@@ -63,7 +63,7 @@ class motorCommunication():
             self.bus.send(message_cmd)
         except Exception as e:
             print("Error during send: ", repr(e))
-
+'''
 class imuCommunication:
     reset = "/reset"
     sleep = "/sleep"
@@ -102,7 +102,7 @@ class imuCommunication:
                 messages.append(message)
         finally:
             return messages
-
+'''
 class loadCellCommunication:
     def ADC_initialize():
         i2c = busio.I2C(board.SCL, board.SDA)
@@ -113,4 +113,4 @@ class loadCellCommunication:
 
     def ADC_read_volt(chan):
         return chan.voltage
-  
+  '''

@@ -1,7 +1,8 @@
 from rehamove import *
-import csv
 import time
 import keyboard
+
+import utils
 
 def calibrate_rehamove(port_name, channel):
 
@@ -26,7 +27,7 @@ def calibrate_rehamove(port_name, channel):
         # Set frequency and duration of contraction
         freq = 40    # Hz
         period = 1/freq * 1000    # ms
-        total_time = 1.5     # s
+        total_time = 0.5     # s
         
         # Set parameters
         pw = 400     # us
@@ -83,39 +84,28 @@ def calibrate_rehamove(port_name, channel):
 
         # Save the data in a csv file
         print("Saving calibration data...")
-        save_to_csv(thresholds)
+
+        if channel == 'white':
+            filename = 'anterior_calibration_data.json'
+        elif channel == 'black':
+            filename = 'middle_calibration_data.json'
+        else:
+            filename = 'calibration_data.json'
+
+        utils.save_to_json(thresholds, filename)
         print("Calibration data saved successfully.")
 
     except Exception as e:
         print(f"\nAn error occurred during calibration: {e}")    
 
-def save_to_csv(data):
-
-    filename = 'calibration_data.csv'
-
-    try:
-        # Open the CSV file and append the data as a new row
-        with open(filename, 'a', newline='') as csvfile:
-            fieldnames = data.keys()
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-            # Write headers only if the file is empty (first run)
-            if csvfile.tell() == 0:
-                writer.writeheader()
-
-            # Write the calibration data as a new row
-            writer.writerow(data)
-    except Exception as e:
-        print(f"Error writing to CSV file: {e}")
-
 if __name__ == '__main__':
     
     port_name = "COM7"
-    possible_channels = ["red", "r", "blue", "b", "grey1", "gray1", "g1", "black", "grey2", "gray2", "g2", "white"]
+    possible_channels = ["red", "blue", "black", "white"]
 
     # Ask the user for the channel
     while True:
-        channel = input("Please enter the channel colour or tipe 'quit': ").lower().strip()
+        channel = input("Channel colour (white for anterior, black for middle) or tipe 'quit': ").lower().strip()
         if channel in possible_channels:
             calibrate_rehamove(port_name, channel)
             break        

@@ -1,6 +1,6 @@
-from communication import motorCommunication
+#from communication import motorCommunication
 from communication import imuCommunication as ic
-from communication import loadCellCommunication as lcc
+#from communication import loadCellCommunication as lcc
 
 import digital_filters as filt
 
