@@ -26,15 +26,22 @@ def compute_joint_angles(UA_mat):
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, imu, muscle, calibration_mode=False, duration=10):
+    def __init__(self, name, system_state, imu, filename, calibration_mode=False, duration=10, start_event=None, stop_event=None):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
         self.imu = imu
         self.imu_fs = 200 # Need to read faster than IMU update frequency
-        self.muscle = muscle
+        self.filename = filename
         self.calibration_mode = calibration_mode
-        self.duration = duration # Time for calibration
+
+        # For calibration
+        self.duration = duration
+        # For system control
+        self.min_sh_el = np.pi/12
+        self.max_sh_el = utils.load_from_json(self.filename, "max_angle")
+        self.start_event = start_event
+        self.stop_event = stop_event
 
     def run(self):
         print("Starting IMU reading thread...")
@@ -73,39 +80,51 @@ class readImuLoop(threading.Thread):
             sh_el_deg = np.degrees(self.system_state.sh_el)
             print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 
+            # For system control, record start and stop events for stimulation
+            if self.start_event is not None and self.stop_event is not None:
+                # Trigger start event when the angle exceeds the threshold
+                if self.start_event and sh_el_deg >= self.min_sh_el and not self.start_event.is_set():
+                    print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
+                    self.start_event.set()
+
+                # Trigger stop event when the max angle is reached
+                if self.stop_event and sh_el_deg >= self.max_sh_el and not self.stop_event.is_set():
+                    print(f"Max angle {self.max_sh_el:.2f}° reached. Stopping stimulation.")
+                    self.stop_event.set()
+
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
         if self.calibration_mode:
             max_sh_el_deg = np.degrees(self.system_state.max_sh_el)
             max_sh_el_deg = np.minimum(max_sh_el_deg, 130.0) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
             
-            if self.muscle == "a":
-                filename = "anterior_calibration_data.json"
-            elif self.muscle == "m":
-                filename = "middle_calibration_data.json"
-            utils.save_to_json(filename, max_sh_el_deg, "max_angle")
+            utils.save_to_json(self.filename, max_sh_el_deg, "max_angle")
             
             print("Calibration complete. Max angle is:", max_sh_el_deg)
         
         print("IMU thread finished.")
-            
-def calibrate():        
-    
-    muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
-    duration_str = input("Duration (number): ")
-    duration = int(duration_str)
 
-    readImuThread = readImuLoop("Read IMU", system_state, imu, muscle, True, duration)
-    readImuThread.start()
-
+# The main of this is just for development scopes. The actual logic of the system is in the main of FES_control.py 
 if __name__ == "__main__":
 
     system_state = systemState()
     imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
+    
+    muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
+    if muscle == "a":
+        filename = "anterior_calibration_data.json"
+    elif muscle == "m":
+        filename = "middle_calibration_data.json"
+    
     calibration_mode = input("Start calibration? (y/n) ").lower().strip()
     
     if calibration_mode == "y":
-        calibrate()
+        duration_str = input("Duration (number): ")
+        duration = int(duration_str)
+
+        readImuThread = readImuLoop("Read IMU", system_state, imu, filename, True, duration)
+    
     else:
-        readImuThread = readImuLoop("Read IMU", system_state, imu, False)
-        readImuThread.start()
+        readImuThread = readImuLoop("Read IMU", system_state, imu, filename, False)
+    
+    readImuThread.start()
