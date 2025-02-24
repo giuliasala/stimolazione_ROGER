@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 from rehamove import *
 
 import time
@@ -8,7 +10,7 @@ import utils
 def calibrate_rehamove(port_name, channel):
 
     try:
-        # Open USB port (Windows)
+        # Open USB port
         r = Rehamove(port_name)
 
         # Error handling for connecting to port while script is running
@@ -16,7 +18,7 @@ def calibrate_rehamove(port_name, channel):
         while r.rehamove is None:
             print("Rehamove device not detected. Retrying...")
             time.sleep(0.5)
-            r = Rehamove(port_name) # Windows
+            r = Rehamove(port_name)
             retries -= 1
         if r.rehamove is None:
             raise Exception("Failed to connect to Rehamove device after multiple attempts.")
@@ -101,7 +103,9 @@ def calibrate_rehamove(port_name, channel):
 
 if __name__ == '__main__':
     
-    port_name = "COM7"
+    port_name = "COM7" # Windows
+    #port_name = "/dev/ttyUSB0" # Linux
+
     possible_channels = ["red", "blue", "black", "white"]
 
     # Ask the user for the channel

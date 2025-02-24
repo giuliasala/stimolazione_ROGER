@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import threading
 import time
 import numpy as np
@@ -125,6 +127,7 @@ class FESControl(threading.Thread):
         self.stop_event = stop_event
 
     def run(self):
+        self.device.change_mode(1)
         # Waits for start event, stimulates and stops when stop event is set
         self.start_event.wait()
         print("Stimulation started")
@@ -144,7 +147,8 @@ class FESControl(threading.Thread):
         print("Stimulation stopped")
 
 def main():
-    port_name = "COM7"
+    port_name = "COM7" # Windows
+    #port_name = "/dev/ttyUSB0" # Linux
     possible_muscles = ["a", "m"]
     
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
@@ -179,6 +183,8 @@ def main():
 
     readImuThread.join()
     stimulationThread.join()
+
+    # Restart stimulation after having stopped it to allow for repetitions
 
 if __name__ == "__main__":
     try:

@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import numpy as np
 import threading
 import time
@@ -10,7 +12,7 @@ from tdu import Imu
 IMU_AXIS_UP = 'Y'
 IMU_RECEIVE_PORTS = 8102
 IMU_SEND_PORT = 9000
-IMU_IP_ADDRESSES = "192.168.1.3" # in AP mode
+IMU_IP_ADDRESSES = "192.168.1.1" # in AP mode
 
 # Thread Lock
 lock = threading.Lock()
@@ -26,7 +28,7 @@ def compute_joint_angles(UA_mat):
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, imu, filename, calibration_mode=False, duration=10, start_event=None, stop_event=None):
+    def __init__(self, name, system_state, imu, filename, calibration_mode=False, duration=5):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
@@ -34,14 +36,7 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.filename = filename
         self.calibration_mode = calibration_mode
-
-        # For calibration
-        self.duration = duration
-        # For system control
-        self.min_sh_el = np.pi/12
-        self.max_sh_el = utils.load_from_json(self.filename, "max_angle")
-        self.start_event = start_event
-        self.stop_event = stop_event
+        self.duration = duration # For calibration
 
     def run(self):
         print("Starting IMU reading thread...")
@@ -80,23 +75,12 @@ class readImuLoop(threading.Thread):
             sh_el_deg = np.degrees(self.system_state.sh_el)
             print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 
-            # For system control, record start and stop events for stimulation
-            if self.start_event is not None and self.stop_event is not None:
-                # Trigger start event when the angle exceeds the threshold
-                if self.start_event and sh_el_deg >= self.min_sh_el and not self.start_event.is_set():
-                    print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
-                    self.start_event.set()
-
-                # Trigger stop event when the max angle is reached
-                if self.stop_event and sh_el_deg >= self.max_sh_el and not self.stop_event.is_set():
-                    print(f"Max angle {self.max_sh_el:.2f}° reached. Stopping stimulation.")
-                    self.stop_event.set()
-
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
         if self.calibration_mode:
             max_sh_el_deg = np.degrees(self.system_state.max_sh_el)
             max_sh_el_deg = np.minimum(max_sh_el_deg, 130.0) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
+            print(f"Maximum Shoulder Elevation (deg): {max_sh_el_deg:.2f}")
             
             utils.save_to_json(self.filename, max_sh_el_deg, "max_angle")
             
@@ -116,15 +100,10 @@ if __name__ == "__main__":
     elif muscle == "m":
         filename = "middle_calibration_data.json"
     
-    calibration_mode = input("Start calibration? (y/n) ").lower().strip()
-    
-    if calibration_mode == "y":
-        duration_str = input("Duration (number): ")
-        duration = int(duration_str)
+    calibration_mode = True
 
-        readImuThread = readImuLoop("Read IMU", system_state, imu, filename, True, duration)
-    
-    else:
-        readImuThread = readImuLoop("Read IMU", system_state, imu, filename, False)
-    
+    duration_str = input("Duration (number): ")
+    duration = int(duration_str)
+
+    readImuThread = readImuLoop("Read IMU", system_state, imu, filename, True, duration)    
     readImuThread.start()
