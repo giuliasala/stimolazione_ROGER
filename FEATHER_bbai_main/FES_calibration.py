@@ -103,8 +103,8 @@ def calibrate_rehamove(port_name, channel):
 
 if __name__ == '__main__':
     
-    port_name = "COM7" # Windows
-    #port_name = "/dev/ttyUSB0" # Linux
+    # port_name = "COM7" # Windows
+    port_name = "/dev/ttyUSB0" # Linux
 
     possible_channels = ["red", "blue", "black", "white"]
 

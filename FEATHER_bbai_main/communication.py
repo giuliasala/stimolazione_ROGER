@@ -79,8 +79,8 @@ class imuCommunication:
 
     def init_receive_socket(receive_port):
         receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        #receive_socket.bind(("", receive_port)) # Linux
-        receive_socket.bind(("0.0.0.0", receive_port)) # Windows (should also work on Linux)
+        receive_socket.bind(("", receive_port)) # Linux
+        #receive_socket.bind(("0.0.0.0", receive_port)) # Windows
         receive_socket.setblocking(True)
         receive_socket.settimeout(1)
         return receive_socket

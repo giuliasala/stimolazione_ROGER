@@ -147,8 +147,8 @@ class FESControl(threading.Thread):
         print("Stimulation stopped")
 
 def main():
-    port_name = "COM7" # Windows
-    #port_name = "/dev/ttyUSB0" # Linux
+    #port_name = "COM7" # Windows
+    port_name = "/dev/ttyUSB0" # Linux
     possible_muscles = ["a", "m"]
     
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
