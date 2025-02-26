@@ -12,7 +12,7 @@ from tdu import Imu
 IMU_AXIS_UP = 'Y'
 IMU_RECEIVE_PORTS = 8102
 IMU_SEND_PORT = 9000
-IMU_IP_ADDRESSES = "192.168.1.1" # in AP mode
+IMU_IP_ADDRESSES = "192.168.1.3" # in AP mode
 
 # Thread Lock
 lock = threading.Lock()

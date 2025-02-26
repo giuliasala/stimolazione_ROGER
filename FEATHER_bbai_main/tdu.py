@@ -13,7 +13,8 @@ import numpy as np
 import time
 import warnings
 
-import ifcfg
+import ifcfg # Linux
+import socket # Windows
 
 class SafetyLimits:
     def __init__(self):
@@ -226,6 +227,8 @@ class Imu():
         self.dt = 0.005 # TODO: Should match control loop frequency
 
     def initialize(self, dt):
+        # Linux
+        '''
         # BeagleBone Public IP address
         for name, interface in ifcfg.interfaces().items():
             if interface['device'] == "wlan0":      # Device name
@@ -234,6 +237,11 @@ class Imu():
                 # Change IMUs UDP send addresses to match BeagleBone IP address
                 self.set_imu_send_ip(IPAddr)
                 print("Setting IMU send address to match the BeagleBone IP adress...")
+        '''
+        # Windows (next 3 lines)
+        IPAddr = socket.gethostbyname(socket.gethostname())
+        print("Detected local IP Address:", IPAddr)
+        self.set_imu_send_ip(IPAddr)
         
         self.receive_socket = ic.init_receive_socket(self.receive_port)
         self.send_socket = ic.init_send_socket()
