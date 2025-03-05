@@ -3,6 +3,7 @@
 import threading
 import time
 import numpy as np
+import csv
 
 from rehamove import *
 
@@ -41,10 +42,18 @@ class readImuLoop(threading.Thread):
         # For calibration
         self.duration = duration
         # For system control
-        self.min_sh_el = np.pi/12
+        self.min_sh_el = np.degrees(np.pi/12)
         self.max_sh_el = utils.load_from_json(self.filename, "max_angle")
         self.start_event = start_event
         self.stop_event = stop_event
+        self.arm_lowered = True
+
+        # IMU log file
+        self.log_file = "imu_log.csv"
+        # Clear previous log file content
+        with open(self.log_file, "w", newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Time", "Shoulder Elevation (deg)"])
 
     def run(self):
         print("Starting IMU reading thread...")
@@ -81,19 +90,30 @@ class readImuLoop(threading.Thread):
                     self.system_state.max_sh_el = max(self.system_state.max_sh_el, self.system_state.sh_el)
               
             sh_el_deg = np.degrees(self.system_state.sh_el)
-            print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
+            # Write IMU readings to log file instead of printing
+            with open(self.log_file, "a", newline='') as f:
+                writer = csv.writer(f)
+                timestamp = time.time()
+                writer.writerow([timestamp, sh_el_deg])
 
             # For system control, record start and stop events for stimulation
             if not self.calibration_mode and self.start_event is not None and self.stop_event is not None:
                 # Trigger start event when the angle exceeds the threshold
-                if sh_el_deg >= self.min_sh_el and not self.start_event.is_set():
+                if sh_el_deg >= self.min_sh_el and not self.start_event.is_set() and self.arm_lowered:
                     print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
                     self.start_event.set()
+                    self.arm_lowered = False
 
                 # Trigger stop event when the max angle is reached
                 if sh_el_deg >= self.max_sh_el and not self.stop_event.is_set():
                     print(f"Max angle {self.max_sh_el:.2f}° reached. Stopping stimulation.")
                     self.stop_event.set()
+                    self.start_event.clear()
+
+                if sh_el_deg <= self.min_sh_el and self.stop_event.is_set():
+                    print(f"Arm has lowered. Ready to restart stimulation.")
+                    self.arm_lowered = True
+                    self.stop_event.clear()
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -104,8 +124,6 @@ class readImuLoop(threading.Thread):
             utils.save_to_json(self.filename, max_sh_el_deg, "max_angle")
             
             print("Calibration complete. Max angle is:", max_sh_el_deg)
-        
-        print("IMU thread finished.")
 
 class FESControl(threading.Thread):
     def __init__(self, name, system_state, port_name, channel, filename, start_event, stop_event):
@@ -121,33 +139,30 @@ class FESControl(threading.Thread):
         self.pw = 400
         self.current = utils.load_from_json(self.filename, "movement_current")
         self.max_current = utils.load_from_json(self.filename, "full_range_current")
-        self.min_sh_el = np.pi/12
-        self.max_sh_el = utils.load_from_json(self.filename, "max_angle")
         self.start_event = start_event
         self.stop_event = stop_event
 
     def run(self):
         self.device.change_mode(1)
         # Waits for start event, stimulates and stops when stop event is set
-        self.start_event.wait()
-        print("Stimulation started")
 
-        while not self.stop_event.is_set():
-            try:
-                self.device.set_pulse(self.current, self.pw)
-                self.device.start(self.channel, self.period)
-                time.sleep(self.duration)
-                self.device.update()
-                self.current += 0.5  # Ramp
-            except Exception as e:
-                print(f"Error during stimulation: {e}")
-                break
+        while True:
+            self.start_event.wait()
+            print("Stimulation started")
 
-        self.start_event.clear()
-        self.stop_event.clear()
+            while not self.stop_event.is_set() and self.current <= self.max_current:
+                try:
+                    self.device.set_pulse(self.current, self.pw)
+                    self.device.start(self.channel, self.period)
+                    time.sleep(self.duration)
+                    self.device.update()
+                    self.current += 0.5  # Ramp
+                except Exception as e:
+                    print(f"Error during stimulation: {e}")
+                    break
 
-        self.device.end()
-        print("Stimulation stopped")
+            self.device.end()
+            print("Stimulation stopped")
 
 def main():
     port_name = "COM7" # Windows
@@ -164,22 +179,12 @@ def main():
         filename = f"{user}_middle_calibration_data.json"
         channel = "black"
 
-    calibration_mode = input("Start calibration? (y/n) ").lower().strip()
-
     system_state = systemState()
     imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
     start_event = threading.Event()
     stop_event = threading.Event()
-
-    if calibration_mode == "y":
-        duration_str = input("Duration (number): ")
-        duration = int(duration_str)
-
-        readImuThread = readImuLoop("Read IMU", system_state, imu, filename, True, duration)
     
-    else:
-        readImuThread = readImuLoop("Read IMU", system_state, imu, filename, False, None, start_event, stop_event)
-
+    readImuThread = readImuLoop("Read IMU", system_state, imu, filename, False, None, start_event, stop_event)
     stimulationThread = FESControl("Stimulation", system_state, port_name, channel, filename, start_event, stop_event)
     
     readImuThread.start()
