@@ -94,11 +94,12 @@ if __name__ == "__main__":
     system_state = systemState()
     imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
     
+    user = input("Your name: ").lower().strip()
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
     if muscle == "a":
-        filename = "anterior_calibration_data.json"
+        filename = f"{user}_anterior_calibration_data.json"
     elif muscle == "m":
-        filename = "middle_calibration_data.json"
+        filename = f"{user}_middle_calibration_data.json"
     
     calibration_mode = True
 

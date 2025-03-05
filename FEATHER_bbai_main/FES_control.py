@@ -86,12 +86,12 @@ class readImuLoop(threading.Thread):
             # For system control, record start and stop events for stimulation
             if not self.calibration_mode and self.start_event is not None and self.stop_event is not None:
                 # Trigger start event when the angle exceeds the threshold
-                if self.start_event and sh_el_deg >= self.min_sh_el and not self.start_event.is_set():
+                if sh_el_deg >= self.min_sh_el and not self.start_event.is_set():
                     print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
                     self.start_event.set()
 
                 # Trigger stop event when the max angle is reached
-                if self.stop_event and sh_el_deg >= self.max_sh_el and not self.stop_event.is_set():
+                if sh_el_deg >= self.max_sh_el and not self.stop_event.is_set():
                     print(f"Max angle {self.max_sh_el:.2f}° reached. Stopping stimulation.")
                     self.stop_event.set()
 
@@ -143,6 +143,9 @@ class FESControl(threading.Thread):
                 print(f"Error during stimulation: {e}")
                 break
 
+        self.start_event.clear()
+        self.stop_event.clear()
+
         self.device.end()
         print("Stimulation stopped")
 
@@ -151,13 +154,14 @@ def main():
     #port_name = "/dev/ttyUSB0" # Linux
     possible_muscles = ["a", "m"]
     
+    user = input("Your name: ").lower().strip()
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
    
     if muscle == "a":
-        filename = "anterior_calibration_data.json"
+        filename = f"{user}_anterior_calibration_data.json"
         channel = "white"
     elif muscle == "m":
-        filename = "middle_calibration_data.json"
+        filename = f"{user}_middle_calibration_data.json"
         channel = "black"
 
     calibration_mode = input("Start calibration? (y/n) ").lower().strip()

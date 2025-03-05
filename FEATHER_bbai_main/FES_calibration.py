@@ -4,10 +4,11 @@ from rehamove import *
 
 import time
 import keyboard
+import os
 
 import utils
 
-def calibrate_rehamove(port_name, channel):
+def calibrate_rehamove(port_name, channel, filename):
 
     try:
         # Open USB port
@@ -88,14 +89,7 @@ def calibrate_rehamove(port_name, channel):
         # Save the data in a csv file
         print("Saving calibration data...")
 
-        if channel == 'white':
-            filename = 'anterior_calibration_data.json'
-        elif channel == 'black':
-            filename = 'middle_calibration_data.json'
-        else:
-            filename = 'calibration_data.json'
-
-        utils.save_to_json(thresholds, filename)
+        utils.save_to_json(filename, thresholds)
         print("Calibration data saved successfully.")
 
     except Exception as e:
@@ -106,16 +100,11 @@ if __name__ == '__main__':
     port_name = "COM7" # Windows
     #port_name = "/dev/ttyUSB0" # Linux
 
-    possible_channels = ["red", "blue", "black", "white"]
-
-    # Ask the user for the channel
-    while True:
-        channel = input("Channel colour (white for anterior, black for middle) or tipe 'quit': ").lower().strip()
-        if channel in possible_channels:
-            calibrate_rehamove(port_name, channel)
-            break        
-        elif channel == 'quit':
-            print("Exiting program")
-            break
-        else:
-            print(f"Invalid channel. Please select a channel from {possible_channels}")
+    user = input("Your name: ").lower().strip()
+    channel = input("Channel colour (white for anterior, black for middle): ").lower().strip()
+    if channel == "white":
+        filename = f"{user}_anterior_calibration_data.json"
+    elif channel == "black":
+        filename = f"{user}_middle_calibration_data.json"
+    
+    calibrate_rehamove(port_name, channel, filename)
