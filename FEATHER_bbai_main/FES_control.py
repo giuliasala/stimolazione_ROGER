@@ -23,9 +23,7 @@ class systemState():
     UA_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
     sh_el = 0
     sh_el_deg = 0
-    max_sh_el = 0
-    max_sh_el_deg = 0
-
+    curr_max_sh_el = 0
     stim_current = 0
 
 def compute_joint_angles(UA_mat):
@@ -34,30 +32,20 @@ def compute_joint_angles(UA_mat):
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, imu, filename, calibration_mode=False, duration=10, start_event=None, max_reached=None):
+    def __init__(self, name, system_state, imu, filename, start_event=None, max_reached=None):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
         self.imu = imu
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.filename = filename
-        self.calibration_mode = calibration_mode
 
-        # For calibration
-        self.duration = duration
         # For system control
         self.min_sh_el = np.degrees(np.pi/12)
         self.sh_el_ref = utils.load_from_json(self.filename, "max_angle")
         self.start_event = start_event
         self.max_reached = max_reached
         self.arm_lowered = True
-
-        # IMU log file
-        self.log_file = "imu_log.csv"
-        # Clear previous log file content
-        with open(self.log_file, "w", newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["Time", "Shoulder Elevation (deg)"])
 
     def run(self):
         print("Starting IMU reading thread...")
@@ -66,13 +54,9 @@ class readImuLoop(threading.Thread):
         self.imu.initialize(dt)
         self.imu.identify() # Strobe IMU leds to identify it
         IMU_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
+        curr_max_sh_el = 0
 
-        start_time = time.time()
-        
         while True:
-
-            #if self.calibration_mode and time.time() - start_time > self.duration:
-            #    break  # Stop after duration if in calibration mode
 
             next_time_instant = time.perf_counter() + dt
             # Get the IMUs rotation matrices
@@ -89,21 +73,17 @@ class readImuLoop(threading.Thread):
                 
                 self.system_state.UA_mat = IMU_mat
                 self.system_state.sh_el = compute_joint_angles(IMU_mat)
-                
-                #if self.calibration_mode:
-                #    self.system_state.max_sh_el = max(self.system_state.max_sh_el, self.system_state.sh_el)
               
             sh_el_deg = np.degrees(self.system_state.sh_el)
             with lock:
                 self.system_state.sh_el_deg = sh_el_deg
-            # Write IMU readings to log file instead of printing
-            with open(self.log_file, "a", newline='') as f:
-                writer = csv.writer(f)
-                timestamp = time.time()
-                writer.writerow([timestamp, sh_el_deg])
+
+            curr_max_sh_el = max(curr_max_sh_el, sh_el_deg)
+            with lock:
+                self.system_state.curr_max_sh_el = curr_max_sh_el
 
             # For system control, record start and stop events for stimulation
-            if not self.calibration_mode and self.start_event is not None and self.max_reached is not None:
+            if self.start_event is not None and self.max_reached is not None:
                 # Trigger start event when the angle exceeds the threshold
                 if sh_el_deg >= self.min_sh_el and not self.start_event.is_set() and self.arm_lowered:
                     print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
@@ -117,19 +97,16 @@ class readImuLoop(threading.Thread):
                     self.start_event.clear()
 
                 if sh_el_deg <= self.min_sh_el and self.max_reached.is_set():
-                    print(f"Arm has lowered. Ready to restart stimulation.")
+                    print(f"Arm has lowered. Max angle for iteration: {curr_max_sh_el:.2f}°")
                     self.arm_lowered = True
                     self.max_reached.clear()
+                    #iteration_max_sh_el = curr_max_sh_el 
+                    #sh_el_error = self.sh_el_ref - iteration_max_sh_el  # Da usare per ILC? 
+                    # Ricorda: in questo if l'iterazione non è davvero finita, ma siamo tornati sotto pi/12 (l'angolo max salvato sarà più alto di quello "vero")
+                    # è da risolvere o possiamo ignorare la cosa??
+                    curr_max_sh_el = 0
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
-
-        #if self.calibration_mode:
-        #    max_sh_el_deg = np.degrees(self.system_state.max_sh_el)
-        #    max_sh_el_deg = np.minimum(max_sh_el_deg, 130.0) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
-        #    
-        #    utils.save_to_json(self.filename, max_sh_el_deg, "max_angle")
-        #    
-        #    print("Calibration complete. Max angle is:", max_sh_el_deg)
 
 class FESControl(threading.Thread):
     def __init__(self, name, system_state, port_name, channel, filename, start_event, max_reached):
@@ -193,7 +170,7 @@ class saveDataLoop(threading.Thread):
 
         with open('log.csv', 'w') as log:
         
-            file_header = "time,sh_el_deg,sh_el,stim_curr\n"
+            file_header = "time,sh_el_deg,sh_el,stim_curr,max_sh_el(deg)\n"
             log.write(file_header)
 
             while True:
@@ -201,7 +178,7 @@ class saveDataLoop(threading.Thread):
                 t = time.perf_counter() - t0
 
                 with lock:
-                    data = "{:.5f},{:.3f},{:.3f},{:.3f}\n".format(t,self.sys_state.sh_el_deg,self.sys_state.sh_el,self.sys_state.stim_current)
+                    data = "{:.5f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(t,self.sys_state.sh_el_deg,self.sys_state.sh_el,self.sys_state.stim_current,self.sys_state.curr_max_sh_el)
                 log.write(data)
 
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
@@ -209,7 +186,6 @@ class saveDataLoop(threading.Thread):
 def main():
     port_name = "COM7" # Windows
     #port_name = "/dev/ttyUSB0" # Linux
-    possible_muscles = ["a", "m"]
     
     user = input("Your name: ").lower().strip()
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
@@ -226,7 +202,7 @@ def main():
     start_event = threading.Event()
     max_reached = threading.Event()
     
-    readImuThread = readImuLoop("Read IMU", system_state, imu, filename, False, None, start_event, max_reached)
+    readImuThread = readImuLoop("Read IMU", system_state, imu, filename, start_event, max_reached)
     stimulationThread = FESControl("Stimulation", system_state, port_name, channel, filename, start_event, max_reached)
     saveDataThread = saveDataLoop("Save data", system_state)
     
