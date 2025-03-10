@@ -3,7 +3,6 @@
 import threading
 import time
 import numpy as np
-import csv
 
 from rehamove import *
 
@@ -25,6 +24,7 @@ class systemState():
     sh_el_deg = 0
     curr_max_sh_el = 0
     stim_current = 0
+    sh_el_error = 0
 
 def compute_joint_angles(UA_mat):
     # Get the current shoulder elevation angle
@@ -100,11 +100,13 @@ class readImuLoop(threading.Thread):
                     print(f"Arm has lowered. Max angle for iteration: {curr_max_sh_el:.2f}°")
                     self.arm_lowered = True
                     self.max_reached.clear()
-                    #iteration_max_sh_el = curr_max_sh_el 
-                    #sh_el_error = self.sh_el_ref - iteration_max_sh_el  # Da usare per ILC? 
+                    iteration_max_sh_el = curr_max_sh_el 
+                    sh_el_error = self.sh_el_ref - iteration_max_sh_el
+                    with lock:
+                        self.system_state.sh_el_error = sh_el_error
+                    curr_max_sh_el = 0
                     # Ricorda: in questo if l'iterazione non è davvero finita, ma siamo tornati sotto pi/12 (l'angolo max salvato sarà più alto di quello "vero")
                     # è da risolvere o possiamo ignorare la cosa??
-                    curr_max_sh_el = 0
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -121,18 +123,25 @@ class FESControl(threading.Thread):
         self.duration = 0.5
         self.pw = 400
         self.min_current = utils.load_from_json(self.filename, "movement_current")
-        self.max_current = utils.load_from_json(self.filename, "full_range_current")
+        self.pain_current = utils.load_from_json(self.filename, "pain_current")
+        self.fullrange_current = utils.load_from_json(self.filename, "full_range_current")
+        self.max_current = 0.5 * self.fullrange_current
         self.start_event = start_event
         self.max_reached = max_reached
 
     def run(self):
         self.device.change_mode(1)
         # Waits for start event, stimulates and stops when stop event is set
-        current = self.min_current
+        current = 0 # or min_current??
 
         while True:
             self.start_event.wait()
             print("Stimulation started")
+
+            sh_el_error = self.system_state.sh_el_error
+            self.max_current = self.max_current + 0.1 * sh_el_error
+            if self.max_current > self.pain_current:
+                self.max_current = self.pain_current - 0.5 # con pain_current o fullrange_current??
 
             while not self.max_reached.is_set() and current <= self.max_current:
                 try:
@@ -154,9 +163,9 @@ class FESControl(threading.Thread):
 
             self.device.end()
             print("Stimulation stopped")
-            current = self.min_current
+            current = 0 # or min_current??
             with lock:
-                        self.system_state.stim_current = 0
+                self.system_state.stim_current = 0
 
 class saveDataLoop(threading.Thread):
     def __init__(self, name, sys_state):
