@@ -3,6 +3,7 @@
 import threading
 import time
 import numpy as np
+import math
 
 from rehamove import *
 
@@ -32,7 +33,7 @@ def compute_joint_angles(UA_mat):
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, imu, filename, start_event=None, max_reached=None):
+    def __init__(self, name, system_state, imu, filename, start_event, max_reached):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
@@ -83,30 +84,29 @@ class readImuLoop(threading.Thread):
                 self.system_state.curr_max_sh_el = curr_max_sh_el
 
             # For system control, record start and stop events for stimulation
-            if self.start_event is not None and self.max_reached is not None:
-                # Trigger start event when the angle exceeds the threshold
-                if sh_el_deg >= self.min_sh_el and not self.start_event.is_set() and self.arm_lowered:
-                    print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
-                    self.start_event.set()
-                    self.arm_lowered = False
+            # Trigger start event when the angle exceeds the threshold
+            if sh_el_deg >= self.min_sh_el and not self.start_event.is_set() and self.arm_lowered:
+                print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
+                self.start_event.set()
+                self.arm_lowered = False
 
-                # Trigger stop event when the max angle is reached
-                if sh_el_deg >= self.sh_el_ref and not self.max_reached.is_set():
-                    print(f"Max angle {self.sh_el_ref:.2f}° reached. Stopping stimulation.")
-                    self.max_reached.set()
-                    self.start_event.clear()
+            # Trigger stop event when the max angle is reached
+            if sh_el_deg >= self.sh_el_ref and not self.max_reached.is_set():
+                print(f"Max angle {self.sh_el_ref:.2f}° reached. Stopping stimulation.")
+                self.max_reached.set()
+                self.start_event.clear()
 
-                if sh_el_deg <= self.min_sh_el and self.max_reached.is_set():
-                    print(f"Arm has lowered. Max angle for iteration: {curr_max_sh_el:.2f}°")
-                    self.arm_lowered = True
-                    self.max_reached.clear()
-                    iteration_max_sh_el = curr_max_sh_el 
-                    sh_el_error = self.sh_el_ref - iteration_max_sh_el
-                    with lock:
-                        self.system_state.sh_el_error = sh_el_error
-                    curr_max_sh_el = 0
-                    # Ricorda: in questo if l'iterazione non è davvero finita, ma siamo tornati sotto pi/12 (l'angolo max salvato sarà più alto di quello "vero")
-                    # è da risolvere o possiamo ignorare la cosa??
+            if sh_el_deg <= self.min_sh_el and self.max_reached.is_set():
+                print(f"Arm has lowered. Max angle for iteration: {curr_max_sh_el:.2f}°")
+                self.arm_lowered = True
+                self.max_reached.clear()
+                iteration_max_sh_el = curr_max_sh_el 
+                sh_el_error = self.sh_el_ref - iteration_max_sh_el
+                with lock:
+                    self.system_state.sh_el_error = sh_el_error
+                curr_max_sh_el = 0
+                # Ricorda: in questo if l'iterazione non è davvero finita, ma siamo tornati sotto pi/12 (l'angolo max salvato sarà più alto di quello "vero")
+                # è da risolvere o possiamo ignorare la cosa??
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -119,9 +119,10 @@ class FESControl(threading.Thread):
         self.filename = filename
         self.device = Rehamove(port_name)
         self.freq = 40
-        self.period = 1/self.freq * 1000
-        self.duration = 0.5
+        self.period_ms = 1/self.freq * 1000
+        self.period_s = 1/self.freq
         self.pw = 400
+        self.tingle_current = utils.load_from_json(self.filename, "tingling_current")
         self.min_current = utils.load_from_json(self.filename, "movement_current")
         self.pain_current = utils.load_from_json(self.filename, "pain_current")
         self.fullrange_current = utils.load_from_json(self.filename, "full_range_current")
@@ -129,41 +130,58 @@ class FESControl(threading.Thread):
         self.start_event = start_event
         self.max_reached = max_reached
 
+    def beta_function(self, t):
+        i = self.tingle_current + (self.max_current - self.tingle_current) / (1 + math.exp(-5 * (t - 1.5)))
+        return i
+
     def run(self):
         self.device.change_mode(1)
         # Waits for start event, stimulates and stops when stop event is set
-        current = 0 # or min_current??
 
         while True:
             self.start_event.wait()
             print("Stimulation started")
+            current = self.tingle_current
 
             sh_el_error = self.system_state.sh_el_error
             self.max_current = self.max_current + 0.1 * sh_el_error
+            self.max_current = round(self.max_current*2) / 2
             if self.max_current > self.pain_current:
                 self.max_current = self.pain_current - 0.5 # con pain_current o fullrange_current??
+            if self.max_current < self.tingle_current:
+                self.max_current = self.tingle_current
 
-            while not self.max_reached.is_set() and current <= self.max_current:
+            start_time = time.perf_counter()
+            t = 0
+
+            while not self.max_reached.is_set() and current <= self.max_current and t < 3:
+                next_time_instant = time.perf_counter() + self.period_s
+                t = time.perf_counter() - start_time
+                print("time t:", t)
+                i = self.beta_function(t) # theoretical current (continuous function)
+                current = round(i*2) / 2
+                
                 try:
                     self.device.set_pulse(current, self.pw)
-                    self.device.start(self.channel, self.period)
-                    time.sleep(self.duration)
+                    self.device.start(self.channel, self.period_ms)
                     self.device.update()
+                    time.sleep(max(next_time_instant-time.perf_counter(),0))
+                
                     with lock:
                         self.system_state.stim_current = current
-                    current += 0.5  # Ramp
+               
                 except Exception as e:
                     print(f"Error during stimulation: {e}")
                     break
             
-            # if max current is reached, even without reaching the angle, act as if the angle was reached (allow to restart)
-            if current > self.max_current:
+            # if max current is reached, even without reaching the angle, allow to restart
+            if current >= self.max_current:
                 self.max_reached.set() 
                 self.start_event.clear()
 
             self.device.end()
             print("Stimulation stopped")
-            current = 0 # or min_current??
+            current = 0
             with lock:
                 self.system_state.stim_current = 0
 
@@ -175,6 +193,7 @@ class saveDataLoop(threading.Thread):
         self.save_fs = 40
     
     def run(self):
+        dt = 1.0 / self.save_fs
         t0 = time.perf_counter()
 
         with open('log.csv', 'w') as log:
@@ -183,7 +202,7 @@ class saveDataLoop(threading.Thread):
             log.write(file_header)
 
             while True:
-                next_time_instant = time.perf_counter() + (1.0 / self.save_fs)
+                next_time_instant = time.perf_counter() + dt
                 t = time.perf_counter() - t0
 
                 with lock:
