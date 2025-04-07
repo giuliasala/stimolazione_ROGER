@@ -131,7 +131,7 @@ class FESControl(threading.Thread):
         self.max_reached = max_reached
 
     def beta_function(self, t):
-        i = self.tingle_current + (self.max_current - self.tingle_current) / (1 + math.exp(-5 * (t - 1.5)))
+        i = self.tingle_current + (self.max_current - self.tingle_current) * math.sqrt(1 / (1 + math.exp(-8 * (t - 1.5))))
         return i
 
     def run(self):
