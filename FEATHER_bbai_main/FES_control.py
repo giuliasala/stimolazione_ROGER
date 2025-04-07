@@ -2,6 +2,7 @@
 
 import threading
 import time
+import datetime
 import numpy as np
 import math
 import keyboard
@@ -191,10 +192,13 @@ class FESControl(threading.Thread):
                 self.system_state.stim_current = 0
 
 class saveDataLoop(threading.Thread):
-    def __init__(self, name, sys_state, emergency_stop):
+    def __init__(self, name, sys_state, emergency_stop, user, muscle):
         threading.Thread.__init__(self)
         self.name = name
         self.sys_state = sys_state
+        self.user = user
+        self.muscle = muscle.upper()
+        self.date = datetime.datetime.now().strftime("%d%m")
         self.save_fs = 100
 
         self.emergency_stop = emergency_stop
@@ -203,7 +207,9 @@ class saveDataLoop(threading.Thread):
         dt = 1.0 / self.save_fs
         t0 = time.perf_counter()
 
-        with open('log.csv', 'w') as log:
+        #filename = f"log_{self.user}_{self.muscle}{self.date}.csv" # for tests
+        filename = "log.csv" # for development
+        with open(filename, 'w') as log:
         
             file_header = "time,sh_el_deg,sh_el,stim_curr,max_sh_el(deg)\n"
             log.write(file_header)
@@ -240,7 +246,7 @@ def main():
     
     readImuThread = readImuLoop("Read IMU", system_state, emergency_stop, imu, filename, start_event, max_reached)
     stimulationThread = FESControl("Stimulation", system_state, emergency_stop, port_name, channel, filename, start_event, max_reached)
-    saveDataThread = saveDataLoop("Save data", system_state, emergency_stop)
+    saveDataThread = saveDataLoop("Save data", system_state, emergency_stop, user, muscle)
     
     threads = []
     threads.append(readImuThread)
