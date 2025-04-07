@@ -4,6 +4,7 @@ import threading
 import time
 import numpy as np
 import math
+import keyboard
 
 from rehamove import *
 
@@ -33,7 +34,7 @@ def compute_joint_angles(UA_mat):
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, imu, filename, start_event, max_reached):
+    def __init__(self, name, system_state, emergency_stop, imu, filename, start_event, max_reached):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
@@ -48,6 +49,8 @@ class readImuLoop(threading.Thread):
         self.max_reached = max_reached
         self.arm_lowered = True
 
+        self.emergency_stop = emergency_stop
+
     def run(self):
         print("Starting IMU reading thread...")
         
@@ -57,7 +60,7 @@ class readImuLoop(threading.Thread):
         IMU_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
         curr_max_sh_el = 0
 
-        while True:
+        while not self.emergency_stop.is_set():
 
             next_time_instant = time.perf_counter() + dt
             # Get the IMUs rotation matrices
@@ -89,13 +92,13 @@ class readImuLoop(threading.Thread):
                 print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
                 self.start_event.set()
                 self.arm_lowered = False
-
+            '''
             # Trigger stop event when the max angle is reached
             if sh_el_deg >= self.sh_el_ref and not self.max_reached.is_set():
                 print(f"Max angle {self.sh_el_ref:.2f}° reached. Stopping stimulation.")
                 self.max_reached.set()
                 self.start_event.clear()
-
+            '''
             if sh_el_deg <= self.min_sh_el and self.max_reached.is_set():
                 print(f"Arm has lowered. Max angle for iteration: {curr_max_sh_el:.2f}°")
                 self.arm_lowered = True
@@ -111,7 +114,7 @@ class readImuLoop(threading.Thread):
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
 class FESControl(threading.Thread):
-    def __init__(self, name, system_state, port_name, channel, filename, start_event, max_reached):
+    def __init__(self, name, system_state, emergency_stop, port_name, channel, filename, start_event, max_reached):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
@@ -130,6 +133,8 @@ class FESControl(threading.Thread):
         self.start_event = start_event
         self.max_reached = max_reached
 
+        self.emergency_stop = emergency_stop
+
     def beta_function(self, t):
         i = self.tingle_current + (self.max_current - self.tingle_current) * math.sqrt(1 / (1 + math.exp(-8 * (t - 1.5))))
         return i
@@ -138,7 +143,7 @@ class FESControl(threading.Thread):
         self.device.change_mode(1)
         # Waits for start event, stimulates and stops when stop event is set
 
-        while True:
+        while not self.emergency_stop.is_set():
             self.start_event.wait()
             print("Stimulation started")
             current = self.tingle_current
@@ -154,7 +159,7 @@ class FESControl(threading.Thread):
             start_time = time.perf_counter()
             t = 0
 
-            while not self.max_reached.is_set() and current <= self.max_current and t < 3:
+            while not self.emergency_stop.is_set() and current <= self.max_current and t < 3:
                 next_time_instant = time.perf_counter() + self.period_s
                 t = time.perf_counter() - start_time
                 print("time t:", t)
@@ -166,31 +171,33 @@ class FESControl(threading.Thread):
                     self.device.start(self.channel, self.period_ms)
                     self.device.update()
                     time.sleep(max(next_time_instant-time.perf_counter(),0))
-                
-                    with lock:
-                        self.system_state.stim_current = current
                
                 except Exception as e:
                     print(f"Error during stimulation: {e}")
                     break
+
+                with lock:
+                        self.system_state.stim_current = current
             
             # if max current is reached, even without reaching the angle, allow to restart
             if current >= self.max_current:
+                print("Max current reached. Stopping stimulation")
                 self.max_reached.set() 
                 self.start_event.clear()
 
             self.device.end()
             print("Stimulation stopped")
-            current = 0
             with lock:
                 self.system_state.stim_current = 0
 
 class saveDataLoop(threading.Thread):
-    def __init__(self, name, sys_state):
+    def __init__(self, name, sys_state, emergency_stop):
         threading.Thread.__init__(self)
         self.name = name
         self.sys_state = sys_state
-        self.save_fs = 40
+        self.save_fs = 100
+
+        self.emergency_stop = emergency_stop
     
     def run(self):
         dt = 1.0 / self.save_fs
@@ -201,12 +208,12 @@ class saveDataLoop(threading.Thread):
             file_header = "time,sh_el_deg,sh_el,stim_curr,max_sh_el(deg)\n"
             log.write(file_header)
 
-            while True:
+            while not self.emergency_stop.is_set():
                 next_time_instant = time.perf_counter() + dt
                 t = time.perf_counter() - t0
 
                 with lock:
-                    data = "{:.5f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(t,self.sys_state.sh_el_deg,self.sys_state.sh_el,self.sys_state.stim_current,self.sys_state.curr_max_sh_el)
+                    data = "{:.5f},{:.3f},{:.3f},{:.2f},{:.3f}\n".format(t,self.sys_state.sh_el_deg,self.sys_state.sh_el,self.sys_state.stim_current,self.sys_state.curr_max_sh_el)
                 log.write(data)
 
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
@@ -229,10 +236,11 @@ def main():
     imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
     start_event = threading.Event()
     max_reached = threading.Event()
+    emergency_stop = threading.Event()
     
-    readImuThread = readImuLoop("Read IMU", system_state, imu, filename, start_event, max_reached)
-    stimulationThread = FESControl("Stimulation", system_state, port_name, channel, filename, start_event, max_reached)
-    saveDataThread = saveDataLoop("Save data", system_state)
+    readImuThread = readImuLoop("Read IMU", system_state, emergency_stop, imu, filename, start_event, max_reached)
+    stimulationThread = FESControl("Stimulation", system_state, emergency_stop, port_name, channel, filename, start_event, max_reached)
+    saveDataThread = saveDataLoop("Save data", system_state, emergency_stop)
     
     threads = []
     threads.append(readImuThread)
@@ -241,6 +249,13 @@ def main():
 
     for t in threads:
         t.start()
+
+    while not emergency_stop.is_set():
+        if keyboard.is_pressed('esc'):
+            print("\nEMERGENCY STOP TRIGGERED!")
+            emergency_stop.set()
+            break
+        time.sleep(0.1)
 
     for t in threads:
         t.join()
