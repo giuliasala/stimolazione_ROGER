@@ -143,6 +143,10 @@ class FESControl(threading.Thread):
         # Waits for start event, stimulates and stops when stop event is set
 
         while not self.emergency_stop.is_set():
+            if not self.start_event.wait(timeout=0.1):  # timeout to check for emergency stop
+                continue
+            if self.emergency_stop.is_set():
+                break
             self.start_event.wait()
             print("Stimulation started")
             current = self.tingle_current
@@ -162,7 +166,7 @@ class FESControl(threading.Thread):
                 next_time_instant = time.perf_counter() + self.period_s
                 t = time.perf_counter() - start_time
                 print("time t:", t)
-                i = self.beta_function(self.tingle_current, self.max_current, self.T ,t) # theoretical current (continuous function)
+                i = beta_function(self.tingle_current, self.max_current, self.T ,t) # theoretical current (continuous function)
                 current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties
                 
                 try:
