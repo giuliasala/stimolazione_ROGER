@@ -11,6 +11,7 @@ from rehamove import *
 
 import utils
 from tdu import Imu
+from beta_function import beta_function
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
@@ -133,12 +134,9 @@ class FESControl(threading.Thread):
         self.max_current = 0.5 * self.fullrange_current
         self.start_event = start_event
         self.max_reached = max_reached
+        self.T = 2 # duration of the movement
 
         self.emergency_stop = emergency_stop
-
-    def beta_function(self, t):
-        i = self.tingle_current + (self.max_current - self.tingle_current) * math.sqrt(1 / (1 + math.exp(-8 * (t - 1.5))))
-        return i
 
     def run(self):
         self.device.change_mode(1)
@@ -160,12 +158,12 @@ class FESControl(threading.Thread):
             start_time = time.perf_counter()
             t = 0
 
-            while not self.emergency_stop.is_set() and current <= self.max_current and t < 3:
+            while not self.emergency_stop.is_set() and current <= self.max_current and t < self.T:
                 next_time_instant = time.perf_counter() + self.period_s
                 t = time.perf_counter() - start_time
                 print("time t:", t)
-                i = self.beta_function(t) # theoretical current (continuous function)
-                current = round(i*2) / 2
+                i = self.beta_function(self.tingle_current, self.max_current, self.T ,t) # theoretical current (continuous function)
+                current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties
                 
                 try:
                     self.device.set_pulse(current, self.pw)
