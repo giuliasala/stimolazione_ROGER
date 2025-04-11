@@ -43,10 +43,10 @@ class readImuLoop(threading.Thread):
         self.imu = imu
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.filename = filename
-
-        # For system control
+       
+        self.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
         self.min_sh_el = np.degrees(np.pi/12)
-        self.sh_el_ref = utils.load_from_json(self.filename, "max_angle")
+        self.sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
         self.start_event = start_event
         self.max_reached = max_reached
         self.arm_lowered = True
@@ -63,8 +63,8 @@ class readImuLoop(threading.Thread):
         curr_max_sh_el = 0
 
         while not self.emergency_stop.is_set():
-
             next_time_instant = time.perf_counter() + dt
+            
             # Get the IMUs rotation matrices
             try:
                 IMU_m = self.imu.read_imu()
@@ -74,18 +74,14 @@ class readImuLoop(threading.Thread):
             except Exception as e:
                 print("IMU read error:", e)
                 pass
-                
-            with lock:
-                
-                self.system_state.UA_mat = IMU_mat
-                self.system_state.sh_el = compute_joint_angles(IMU_mat)
-              
-            sh_el_deg = np.degrees(self.system_state.sh_el)
-            with lock:
-                self.system_state.sh_el_deg = sh_el_deg
-
+            sh_el = compute_joint_angles(IMU_mat) - self.precalibration_angle
+            sh_el_deg = np.degrees(sh_el)
             curr_max_sh_el = max(curr_max_sh_el, sh_el_deg)
+            
             with lock:
+                self.system_state.UA_mat = IMU_mat
+                self.system_state.sh_el = sh_el
+                self.system_state.sh_el_deg = sh_el_deg
                 self.system_state.curr_max_sh_el = curr_max_sh_el
 
             # For system control, record start and stop events for stimulation
