@@ -10,9 +10,9 @@ from tdu import Imu
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORTS = 8102
+IMU_RECEIVE_PORTS = [8102, 8101]
 IMU_SEND_PORT = 9000
-IMU_IP_ADDRESSES = "192.168.1.3" # in AP mode
+IMU_IP_ADDRESSES = ["192.168.1.3","192.168.0.101"] # in AP mode
 
 # Thread Lock
 lock = threading.Lock()
@@ -23,7 +23,7 @@ def compute_joint_angles(UA_mat):
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, imu, filename):
+    def __init__(self, name, imu, filename, contralateral):
         threading.Thread.__init__(self)
         self.name = name
         self.imu = imu
@@ -31,6 +31,7 @@ class readImuLoop(threading.Thread):
         self.dt = 1.0 / self.imu_fs
         self.filename = filename
         self.duration = 3 # of the movement
+        self.contralateral = contralateral
 
         self.initial_sh_el = 0
         self.max_sh_el = 0
@@ -60,7 +61,6 @@ class readImuLoop(threading.Thread):
         
         initial_sh_el_deg = np.degrees(self.initial_sh_el)
         print(f"Pre-calibration Shoulder Elevation (deg): {initial_sh_el_deg:.2f}")
-        utils.save_to_json(self.filename, round(self.initial_sh_el, 3), "precalibration_angle (rad)")
         
     def run(self):
         print("Starting IMU reading thread...")
@@ -75,33 +75,38 @@ class readImuLoop(threading.Thread):
         except RuntimeError:
             print("Pre-calibration failed.")
             return
+        if self.contralateral:
+            utils.save_to_json(self.filename, round(self.initial_sh_el, 3), "contralateral_precalibration_angle (rad)")
+        else:
+            utils.save_to_json(self.filename, round(self.initial_sh_el, 3),"precalibration_angle (rad)")
 
-        # Main loop
-        start_time = time.time()
-        
-        while time.time() - start_time < self.duration:
-            next_time_instant = time.perf_counter() + self.dt
+            # Main loop
+            start_time = time.time()
             
-            IMU_mat = self.read_imu_matrix()
-            sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
-            sh_el_deg = np.degrees(sh_el)
-            self.max_sh_el = max(self.max_sh_el, sh_el)
-            
-            print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
+            while time.time() - start_time < self.duration:
+                next_time_instant = time.perf_counter() + self.dt
+                
+                IMU_mat = self.read_imu_matrix()
+                sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
+                sh_el_deg = np.degrees(sh_el)
+                self.max_sh_el = max(self.max_sh_el, sh_el)
+                
+                print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 
-            time.sleep(max(next_time_instant - time.perf_counter(), 0))
-        
-        max_sh_el_deg = np.degrees(self.max_sh_el)
-        max_sh_el_deg = np.minimum(max_sh_el_deg, 130.00) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
-        print(f"Maximum Shoulder Elevation (deg): {max_sh_el_deg:.2f}")
-        
-        utils.save_to_json(self.filename, round(max_sh_el_deg, 3), "max_angle (deg)")
-        
+                time.sleep(max(next_time_instant - time.perf_counter(), 0))
+            
+            max_sh_el_deg = np.degrees(self.max_sh_el)
+            max_sh_el_deg = np.minimum(max_sh_el_deg, 130.00) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
+            print(f"Maximum Shoulder Elevation (deg): {max_sh_el_deg:.2f}")
+            
+            utils.save_to_json(self.filename, round(max_sh_el_deg, 3), "max_angle (deg)")
+            
         print("Calibration complete.")
 
 if __name__ == "__main__":
 
-    imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
+    imu1 = Imu(IMU_RECEIVE_PORTS[0], IMU_IP_ADDRESSES[0], IMU_SEND_PORT, IMU_AXIS_UP)
+    imu2 = Imu(IMU_RECEIVE_PORTS[1], IMU_IP_ADDRESSES[1], IMU_SEND_PORT, IMU_AXIS_UP)
     
     user = input("Your name: ").lower().strip()
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
@@ -113,5 +118,7 @@ if __name__ == "__main__":
         print("Invalid input. Exiting.")
         exit()
 
-    readImuThread = readImuLoop("Read IMU", imu, filename)    
-    readImuThread.start()
+    readImu1Thread = readImuLoop("Read IMU", imu1, filename, contralateral=False)
+    readImu2Thread = readImuLoop("Read IMU", imu2, filename, contralateral=True)  
+    readImu1Thread.start()
+    readImu2Thread.start()
