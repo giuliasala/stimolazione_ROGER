@@ -10,9 +10,9 @@ from tdu import Imu
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORTS = [8102, 8101]
+IMU_RECEIVE_PORTS = [8101, 8102]
 IMU_SEND_PORT = 9000
-IMU_IP_ADDRESSES = ["192.168.1.3","192.168.0.101"] # in AP mode
+IMU_IP_ADDRESSES = ["192.168.0.101","192.168.0.102"] # in client mode
 
 # Thread Lock
 lock = threading.Lock()
