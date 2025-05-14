@@ -47,13 +47,7 @@ class readImuLoop(threading.Thread):
         self.contralateral = contralateral
         self.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
         self.contralateral_precalibration_angle = utils.load_from_json(self.filename, "contralateral_precalibration_angle (rad)")
-        '''
-        self.min_sh_el = np.degrees(np.pi/12)
-        self.sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
-        self.start_event = start_event
-        self.max_reached = max_reached
-        self.arm_lowered = True
-        '''
+
         self.emergency_stop = emergency_stop
 
     def run(self):
@@ -140,8 +134,6 @@ class handleEvents(threading.Thread):
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
                     self.system_state.curr_max_sh_el = 0
-                # Ricorda: in questo if l'iterazione non è davvero finita, ma siamo tornati sotto pi/12 (l'angolo max salvato sarà più alto di quello "vero")
-                # è da risolvere o possiamo ignorare la cosa??
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -169,7 +161,6 @@ class FESControl(threading.Thread):
         self.emergency_stop = emergency_stop
 
     def run(self):
-        self.device.change_mode(1)
         # Waits for start event, stimulates and stops when stop event is set
 
         while not self.emergency_stop.is_set():
@@ -200,9 +191,7 @@ class FESControl(threading.Thread):
                 current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties
                 
                 try:
-                    self.device.set_pulse(current, self.pw)
-                    self.device.start(self.channel, self.period_ms)
-                    self.device.update()
+                    self.device.pulse(self.channel, current, self.pw)
                     time.sleep(max(next_time_instant-time.perf_counter(),0))
                
                 except Exception as e:
@@ -218,7 +207,6 @@ class FESControl(threading.Thread):
                 self.max_reached.set() 
                 self.start_event.clear()
 
-            self.device.end()
             print("Stimulation stopped")
             with lock:
                 self.system_state.stim_current = 0
@@ -268,7 +256,7 @@ def main():
         channel = "white"
     elif muscle == "m":
         filename = f"{user}_middle_calibration_data.json"
-        channel = "black"
+        channel = "blue"
 
     system_state = systemState()
     imu1 = Imu(IMU_RECEIVE_PORTS[0], IMU_IP_ADDRESSES[0], IMU_SEND_PORT, IMU_AXIS_UP)

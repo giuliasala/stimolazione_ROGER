@@ -101,10 +101,10 @@ if __name__ == '__main__':
     #port_name = "/dev/ttyUSB0" # Linux
 
     user = input("Your name: ").lower().strip()
-    channel = input("Channel colour (white for anterior, black for middle): ").lower().strip()
+    channel = input("Channel colour (white for anterior, blue for middle): ").lower().strip()
     if channel == "white":
         filename = f"{user}_anterior_calibration_data.json"
-    elif channel == "black":
+    elif channel == "blue":
         filename = f"{user}_middle_calibration_data.json"
     
     calibrate_rehamove(port_name, channel, filename)
