@@ -2,7 +2,7 @@
 
 import threading
 import time
-import datetime
+from datetime import datetime
 import numpy as np
 import math
 import keyboard
@@ -218,7 +218,7 @@ class saveDataLoop(threading.Thread):
         self.sys_state = sys_state
         self.user = user
         self.muscle = muscle.upper()
-        self.date = datetime.datetime.now().strftime("%d%m")
+        self.date = datetime.now().strftime("%m%d_%H%M%S")
         self.save_fs = 100
 
         self.emergency_stop = emergency_stop
@@ -231,7 +231,7 @@ class saveDataLoop(threading.Thread):
         filename = "log.csv" # for development
         with open(filename, 'w') as log:
         
-            file_header = "time,sh_el_deg,sh_el,stim_curr,max_sh_el(deg)\n"
+            file_header = "time,contralateral_sh_el_deg,sh_el_deg,stim_curr\n"
             log.write(file_header)
 
             while not self.emergency_stop.is_set():
@@ -239,7 +239,7 @@ class saveDataLoop(threading.Thread):
                 t = time.perf_counter() - t0
 
                 with lock:
-                    data = "{:.5f},{:.3f},{:.3f},{:.2f},{:.3f}\n".format(t,self.sys_state.sh_el_deg,self.sys_state.sh_el,self.sys_state.stim_current,self.sys_state.curr_max_sh_el)
+                    data = "{:.5f},{:.3f},{:.3f},{:.2f},{:.3f}\n".format(t,self.sys_state.contralateral_sh_el_deg,self.sys_state.sh_el_deg,self.sys_state.stim_current)
                 log.write(data)
 
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
