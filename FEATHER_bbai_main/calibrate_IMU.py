@@ -10,7 +10,7 @@ from tdu import Imu
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORTS = [8101, 8102]
+IMU_RECEIVE_PORTS = [8100, 8102]
 IMU_SEND_PORT = 9000
 IMU_IP_ADDRESSES = ["192.168.0.101","192.168.0.102"] # in client mode
 
@@ -48,6 +48,7 @@ class readImuLoop(threading.Thread):
             return None
     
     def pre_calibrate(self):
+        time.sleep(2) # temporary, to let me adjust when doing trials
         print(f"Starting pre-calibration. Please stay still for {self.duration} seconds...")
         start_time = time.time()
 

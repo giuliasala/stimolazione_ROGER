@@ -15,7 +15,7 @@ from beta_function import beta_function
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORTS = [8101, 8102]
+IMU_RECEIVE_PORTS = [8100, 8102]
 IMU_SEND_PORT = 9000
 IMU_IP_ADDRESSES = ["192.168.0.101","192.168.0.102"] # in client mode
 
@@ -239,7 +239,7 @@ class saveDataLoop(threading.Thread):
                 t = time.perf_counter() - t0
 
                 with lock:
-                    data = "{:.5f},{:.3f},{:.3f},{:.2f},{:.3f}\n".format(t,self.sys_state.contralateral_sh_el_deg,self.sys_state.sh_el_deg,self.sys_state.stim_current)
+                    data = "{:.5f},{:.3f},{:.3f},{:.2f}\n".format(t,self.sys_state.contralateral_sh_el_deg,self.sys_state.sh_el_deg,self.sys_state.stim_current)
                 log.write(data)
 
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
