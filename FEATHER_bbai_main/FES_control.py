@@ -245,8 +245,8 @@ class saveDataLoop(threading.Thread):
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
 
 def main():
-    port_name = "COM7" # Windows
-    #port_name = "/dev/ttyUSB0" # Linux
+    #port_name = "COM7" # Windows
+    port_name = "/dev/ttyUSB0" # Linux
     
     user = input("Your name: ").lower().strip()
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
@@ -282,7 +282,7 @@ def main():
         t.start()
 
     while not emergency_stop.is_set():
-        if keyboard.is_pressed('esc'):
+        if utils.get_key_nonblocking() == 'esc':
             print("\nEMERGENCY STOP TRIGGERED!")
             emergency_stop.set()
             break

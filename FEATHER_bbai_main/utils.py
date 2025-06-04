@@ -2,6 +2,10 @@
 
 import json
 import os
+import sys
+import select
+import termios
+import tty
 
 def save_to_json(filename, new_data, key=None):
     data = {}
@@ -40,3 +44,14 @@ def load_from_json(filename, key):
     except Exception as e:
         print(f"Error loading calibration data: {e}")
         return 0
+    
+def get_key_nonblocking():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        if select.select([sys.stdin], [], [], 0)[0]:
+            return sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return None

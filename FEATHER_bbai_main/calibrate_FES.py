@@ -3,8 +3,6 @@
 from rehamove import *
 
 import time
-import keyboard
-import os
 
 import utils
 
@@ -59,17 +57,18 @@ def calibrate_rehamove(port_name, channel, filename):
                 continue
             
             # Interacting with user
-            
-            if keyboard.is_pressed('j') and thresholds['tingling_current'] is None:
+            key = utils.get_key_nonblocking()
+
+            if key == 'j' and thresholds['tingling_current'] is None:
                 thresholds['tingling_current'] = current
 
-            elif keyboard.is_pressed('k') and thresholds['movement_current'] is None:
+            elif key == 'k' and thresholds['movement_current'] is None:
                 thresholds['movement_current'] = current
                 
-            elif keyboard.is_pressed('l') and thresholds['full_range_current'] is None:
+            elif key == 'l' and thresholds['full_range_current'] is None:
                 thresholds['full_range_current'] = current
             
-            elif keyboard.is_pressed('p') and thresholds['pain_current'] is None:
+            elif key == 'p' and thresholds['pain_current'] is None:
                 thresholds['pain_current'] = current
                 
             if thresholds['pain_current'] is not None:
@@ -97,8 +96,8 @@ def calibrate_rehamove(port_name, channel, filename):
 
 if __name__ == '__main__':
     
-    port_name = "COM7" # Windows
-    #port_name = "/dev/ttyUSB0" # Linux
+    #port_name = "COM7" # Windows
+    port_name = "/dev/ttyUSB0" # Linux
 
     user = input("Your name: ").lower().strip()
     channel = input("Channel colour (white for anterior, blue for middle): ").lower().strip()
