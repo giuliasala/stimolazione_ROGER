@@ -4,7 +4,6 @@ from rehamove import *
 
 import time
 import keyboard
-import os
 
 import utils
 
@@ -97,7 +96,7 @@ def calibrate_rehamove(port_name, channel, filename):
 
 if __name__ == '__main__':
     
-    port_name = "COM7" # Windows
+    port_name = "COM9" # Windows
     #port_name = "/dev/ttyUSB0" # Linux
 
     user = input("Your name: ").lower().strip()

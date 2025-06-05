@@ -26,7 +26,9 @@ class systemState():
     UA_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
     sh_el = 0
     sh_el_deg = 0
+    old_sh_el_deg = 0
     contralateral_sh_el_deg = 0
+    old_contr_sh_el_deg = 0
     curr_max_sh_el = 0
     stim_current = 0
     sh_el_error = 0
@@ -72,6 +74,7 @@ class readImuLoop(threading.Thread):
                 pass
             
             if not self.contralateral:
+                old_sh_el_deg = self.system_state.sh_el_deg
                 sh_el = compute_joint_angles(IMU_mat) - self.precalibration_angle
                 sh_el_deg = np.degrees(sh_el)
                 curr_max_sh_el = max(self.system_state.curr_max_sh_el, sh_el_deg)
@@ -81,12 +84,15 @@ class readImuLoop(threading.Thread):
                     self.system_state.sh_el = sh_el
                     self.system_state.sh_el_deg = sh_el_deg
                     self.system_state.curr_max_sh_el = curr_max_sh_el
+                    self.system_state.old_sh_el_deg = old_sh_el_deg
 
             elif self.contralateral:
+                old_contr_sh_el_deg = self.system_state.contralateral_sh_el_deg
                 contralateral_sh_el = compute_joint_angles(IMU_mat) - self.contralateral_precalibration_angle
                 contralateral_sh_el_deg = np.degrees(contralateral_sh_el)
                 with lock:
                     self.system_state.contralateral_sh_el_deg = contralateral_sh_el_deg
+                    self.system_state.old_contr_sh_el_deg = old_contr_sh_el_deg
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -102,38 +108,48 @@ class handleEvents(threading.Thread):
         self.sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
         self.start_event = start_event
         self.max_reached = max_reached
-        self.arm_lowered = True
 
         self.emergency_stop = emergency_stop
 
     def run(self):
         dt = 1.0 / self.fs
+        arms_lowered = False
 
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
 
-            # For system control, record start and stop events for stimulation
-            # Trigger start event when the angle of contralateral arm exceeds the threshold
-            if self.system_state.contralateral_sh_el_deg >= self.min_sh_el and not self.start_event.is_set() and self.arm_lowered:
+            # For system control, record events to control stimulation
+
+            # Trigger start event when the angle of contralateral arm exceeds the threshold and it's rising
+            if (self.system_state.contralateral_sh_el_deg >= self.min_sh_el and 
+                self.system_state.contralateral_sh_el_deg > self.system_state.old_contr_sh_el_deg and 
+                not self.start_event.is_set() and arms_lowered):
                 print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
                 self.start_event.set()
-                self.arm_lowered = False
-            '''
-            # Trigger stop event when the max angle is reached
-            if sh_el_deg >= self.sh_el_ref and not self.max_reached.is_set():
-                print(f"Max angle {self.sh_el_ref:.2f}° reached. Stopping stimulation.")
-                self.max_reached.set()
-                self.start_event.clear()
-            '''
-            if self.system_state.sh_el_deg <= self.min_sh_el and self.max_reached.is_set():
-                print(f"Arm has lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")
-                self.arm_lowered = True
-                self.max_reached.clear()
+                arms_lowered = False
+
+            # When the assisted arm is lowered, update error and clear event
+            #print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}")
+            if (self.system_state.sh_el_deg < self.min_sh_el and
+                self.system_state.sh_el_deg < self.system_state.old_sh_el_deg  and
+                self.max_reached.is_set()):
+                print(f"Assisted arm has lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")
                 iteration_max_sh_el = self.system_state.curr_max_sh_el 
                 sh_el_error = self.sh_el_ref - iteration_max_sh_el
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
                     self.system_state.curr_max_sh_el = 0
+
+                self.arm_lowered = True                
+                self.max_reached.clear()
+
+            # Make sure that, before triggering a new start, both arms are below threshold
+            if (self.system_state.sh_el_deg < self.min_sh_el and 
+                self.system_state.contralateral_sh_el_deg < self.min_sh_el and 
+                not self.start_event.is_set()):
+                if not arms_lowered:
+                    print("Both arms lowered, ready for new stimulation.")
+                arms_lowered = True
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -156,7 +172,7 @@ class FESControl(threading.Thread):
         self.max_current = 0.5 * self.fullrange_current
         self.start_event = start_event
         self.max_reached = max_reached
-        self.T = 2 # duration of the movement
+        self.T = 3 # duration of the movement
 
         self.emergency_stop = emergency_stop
 
@@ -245,7 +261,7 @@ class saveDataLoop(threading.Thread):
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
 
 def main():
-    port_name = "COM7" # Windows
+    port_name = "COM9" # Windows
     #port_name = "/dev/ttyUSB0" # Linux
     
     user = input("Your name: ").lower().strip()

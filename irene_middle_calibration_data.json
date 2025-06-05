@@ -1,0 +1,9 @@
+{
+    "precalibration_angle (rad)": 0.301,
+    "max_angle (deg)": 99.522,
+    "contralateral_precalibration_angle (rad)": 0.117,
+    "tingling_current": 2.5,
+    "movement_current": 9.5,
+    "full_range_current": 12.0,
+    "pain_current": 12.5
+}

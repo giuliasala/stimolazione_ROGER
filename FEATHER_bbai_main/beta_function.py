@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def beta_function(tingle_current, max_current, T, t):
-        slope = 20 / T
-        i = tingle_current + (max_current - tingle_current) * np.sqrt(1 / (1 + np.exp(-slope * (t - T/2))))
+        slope = 25 / T
+        i = tingle_current + (max_current - tingle_current) * np.sqrt(1 / (1 + np.exp(-slope * (t - T/2.5))))
         return i
 
 def step_beta_function(i):
@@ -13,7 +13,7 @@ def step_beta_function(i):
 if __name__ == "__main__":
         tingle_current = 3
         max_current = 22
-        T = 2 # time for the movement
+        T = 3 # time for the movement
 
         sampling_interval = 0.025  # 40Hz (real-world time step)
         num_points = int(T / sampling_interval) + 1

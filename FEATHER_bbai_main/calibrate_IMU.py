@@ -30,7 +30,7 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.dt = 1.0 / self.imu_fs
         self.filename = filename
-        self.duration = 3 # of the movement
+        self.duration = 5 # of the movement
         self.contralateral = contralateral
 
         self.initial_sh_el = 0
