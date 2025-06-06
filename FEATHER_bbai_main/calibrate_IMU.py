@@ -30,11 +30,12 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.dt = 1.0 / self.imu_fs
         self.filename = filename
-        self.duration = 5 # of the movement
+        self.duration = 3 # of the movement
         self.contralateral = contralateral
 
+        self.initial_sh_el_array = []
         self.initial_sh_el = 0
-        self.max_sh_el = 0
+        self.max_sh_el_array = []
 
     def read_imu_matrix(self):
         # Get the IMUs rotation matrix
@@ -56,10 +57,12 @@ class readImuLoop(threading.Thread):
             next_time_instant = time.perf_counter() + self.dt
             
             IMU_mat = self.read_imu_matrix()
-            self.initial_sh_el = compute_joint_angles(IMU_mat)
+            sh_el = compute_joint_angles(IMU_mat)
+            self.initial_sh_el_array.append(sh_el)
             
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
         
+        self.initial_sh_el = np.median(self.initial_sh_el_array)
         initial_sh_el_deg = np.degrees(self.initial_sh_el)
         print(f"Pre-calibration Shoulder Elevation (deg): {initial_sh_el_deg:.2f}")
         
@@ -81,25 +84,30 @@ class readImuLoop(threading.Thread):
         else:
             utils.save_to_json(self.filename, round(self.initial_sh_el, 3),"precalibration_angle (rad)")
 
-            # Main loop
-            start_time = time.time()
+            # 3 ripetizioni per estrarre l'angolo massimo raggiungibile
+            for rep in range(3):
+                print(f"Rep {rep+1}")
+                self.max_sh_el = 0
+                start_time = time.time()
             
-            while time.time() - start_time < self.duration:
-                next_time_instant = time.perf_counter() + self.dt
-                
-                IMU_mat = self.read_imu_matrix()
-                sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
-                sh_el_deg = np.degrees(sh_el)
-                self.max_sh_el = max(self.max_sh_el, sh_el)
-                
-                print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
+                while time.time() - start_time < self.duration:
+                    next_time_instant = time.perf_counter() + self.dt
+                    
+                    IMU_mat = self.read_imu_matrix()
+                    sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
+                    sh_el_deg = np.degrees(sh_el)
+                    self.max_sh_el = max(self.max_sh_el, sh_el)
+                    
+                    print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 
-                time.sleep(max(next_time_instant - time.perf_counter(), 0))
+                    time.sleep(max(next_time_instant - time.perf_counter(), 0))
+                
+                max_sh_el_deg = np.degrees(self.max_sh_el)
+                max_sh_el_deg = np.minimum(max_sh_el_deg, 130.00) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
+                print(f"Maximum Shoulder Elevation (deg) for rep {rep+1}: {max_sh_el_deg:.2f}")
+                self.max_sh_el_array.append(max_sh_el_deg)
             
-            max_sh_el_deg = np.degrees(self.max_sh_el)
-            max_sh_el_deg = np.minimum(max_sh_el_deg, 130.00) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
-            print(f"Maximum Shoulder Elevation (deg): {max_sh_el_deg:.2f}")
-            
+            final_max_angle = np.mean(self.max_sh_el_array)
             utils.save_to_json(self.filename, round(max_sh_el_deg, 3), "max_angle (deg)")
             
         print("Calibration complete.")

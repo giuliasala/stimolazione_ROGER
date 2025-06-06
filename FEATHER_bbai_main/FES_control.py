@@ -128,7 +128,7 @@ class handleEvents(threading.Thread):
                 self.start_event.set()
                 arms_lowered = False
 
-            # When the assisted arm is lowered, update error and clear event
+            # When the assisted arm is below the threshold (and lowering), update error and clear event
             #print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}")
             if (self.system_state.sh_el_deg < self.min_sh_el and
                 self.system_state.sh_el_deg < self.system_state.old_sh_el_deg  and
