@@ -138,9 +138,7 @@ class handleEvents(threading.Thread):
                 sh_el_error = self.sh_el_ref - iteration_max_sh_el
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
-                    self.system_state.curr_max_sh_el = 0
-
-                self.arm_lowered = True                
+                    self.system_state.curr_max_sh_el = 0               
                 self.max_reached.clear()
 
             # Make sure that, before triggering a new start, both arms are below threshold
@@ -172,7 +170,8 @@ class FESControl(threading.Thread):
         self.max_current = 0.5 * self.fullrange_current
         self.start_event = start_event
         self.max_reached = max_reached
-        self.T = 3 # duration of the movement
+        self.movement_duration = utils.load_from_json(self.filename, "movement_duration")
+        self.T = self.movement_duration + 1 # add one second for holding the arm up (see beta_function)
 
         self.emergency_stop = emergency_stop
 

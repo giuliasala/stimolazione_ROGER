@@ -30,12 +30,14 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.dt = 1.0 / self.imu_fs
         self.filename = filename
-        self.duration = 3 # of the movement
+        self.duration = 4 # of the movement
+        self.pre_duration = 3 # for pre-calibration
         self.contralateral = contralateral
 
         self.initial_sh_el_array = []
         self.initial_sh_el = 0
         self.max_sh_el_array = []
+        self.duration_array = []
 
     def read_imu_matrix(self):
         # Get the IMUs rotation matrix
@@ -50,10 +52,10 @@ class readImuLoop(threading.Thread):
     
     def pre_calibrate(self):
         time.sleep(2) # temporary, to let me adjust when doing trials
-        print(f"Starting pre-calibration. Please stay still for {self.duration} seconds...")
+        print(f"Starting pre-calibration. Please stay still for {self.pre_duration} seconds...")
         start_time = time.time()
 
-        while time.time() - start_time < self.duration:
+        while time.time() - start_time < self.pre_duration:
             next_time_instant = time.perf_counter() + self.dt
             
             IMU_mat = self.read_imu_matrix()
@@ -62,7 +64,7 @@ class readImuLoop(threading.Thread):
             
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
         
-        self.initial_sh_el = np.median(self.initial_sh_el_array)
+        self.initial_sh_el = np.mean(self.initial_sh_el_array)
         initial_sh_el_deg = np.degrees(self.initial_sh_el)
         print(f"Pre-calibration Shoulder Elevation (deg): {initial_sh_el_deg:.2f}")
         
@@ -84,10 +86,11 @@ class readImuLoop(threading.Thread):
         else:
             utils.save_to_json(self.filename, round(self.initial_sh_el, 3),"precalibration_angle (rad)")
 
-            # 3 ripetizioni per estrarre l'angolo massimo raggiungibile
+            # 3 ripetizioni per estrarre l'angolo massimo raggiungibile e durata del movimento
             for rep in range(3):
                 print(f"Rep {rep+1}")
                 self.max_sh_el = 0
+                angle_trace = []  # List to store (timestamp, angle_deg)
                 start_time = time.time()
             
                 while time.time() - start_time < self.duration:
@@ -97,6 +100,8 @@ class readImuLoop(threading.Thread):
                     sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
                     sh_el_deg = np.degrees(sh_el)
                     self.max_sh_el = max(self.max_sh_el, sh_el)
+
+                    angle_trace.append((time.time(), sh_el_deg))
                     
                     print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 
@@ -106,9 +111,30 @@ class readImuLoop(threading.Thread):
                 max_sh_el_deg = np.minimum(max_sh_el_deg, 130.00) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
                 print(f"Maximum Shoulder Elevation (deg) for rep {rep+1}: {max_sh_el_deg:.2f}")
                 self.max_sh_el_array.append(max_sh_el_deg)
-            
+
+                # Find movement start and end times
+                min_angle_deg = 5
+                movement_start = None
+                movement_end = None
+                for t, a in angle_trace:
+                    if a > min_angle_deg:
+                        movement_start = t
+                        break
+                for t, a in angle_trace:
+                    if abs(a - max_sh_el_deg) < 0.01:  # tolerance for float comparison
+                        movement_end = t
+                        break
+                if movement_start and movement_end:
+                    movement_duration = movement_end - movement_start
+                    print(f"Movement duration for rep {rep+1}: {movement_duration:.3f} seconds")
+                    self.duration_array.append(movement_duration)
+                else:
+                    print(f"Could not determine movement duration for rep {rep+1}")
+                        
             final_max_angle = np.mean(self.max_sh_el_array)
-            utils.save_to_json(self.filename, round(max_sh_el_deg, 3), "max_angle (deg)")
+            final_duration = np.mean(self.duration_array)
+            utils.save_to_json(self.filename, round(final_max_angle, 3), "max_angle (deg)")
+            utils.save_to_json(self.filename, round(final_duration, 3), "movement_duration")
             
         print("Calibration complete.")
 
