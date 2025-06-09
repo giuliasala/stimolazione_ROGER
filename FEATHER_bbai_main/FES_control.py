@@ -15,9 +15,9 @@ from beta_function import beta_function
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORTS = 8102
+IMU_RECEIVE_PORT = 8102
 IMU_SEND_PORT = 9000
-IMU_IP_ADDRESSES = "192.168.1.3" # in AP mode
+IMU_IP_ADDRESS = "192.168.1.2" # in AP mode
 
 # Thread Lock
 lock = threading.Lock()
@@ -26,6 +26,7 @@ class systemState():
     UA_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
     sh_el = 0
     sh_el_deg = 0
+    old_sh_el_deg = 0
     curr_max_sh_el = 0
     stim_current = 0
     sh_el_error = 0
@@ -43,13 +44,7 @@ class readImuLoop(threading.Thread):
         self.imu = imu
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.filename = filename
-       
         self.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
-        self.min_sh_el = np.degrees(np.pi/12)
-        self.sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
-        self.start_event = start_event
-        self.max_reached = max_reached
-        self.arm_lowered = True
 
         self.emergency_stop = emergency_stop
 
@@ -74,6 +69,8 @@ class readImuLoop(threading.Thread):
             except Exception as e:
                 print("IMU read error:", e)
                 pass
+            
+            old_sh_el_deg = self.system_state.sh_el_deg
             sh_el = compute_joint_angles(IMU_mat) - self.precalibration_angle
             sh_el_deg = np.degrees(sh_el)
             curr_max_sh_el = max(curr_max_sh_el, sh_el_deg)
@@ -83,31 +80,53 @@ class readImuLoop(threading.Thread):
                 self.system_state.sh_el = sh_el
                 self.system_state.sh_el_deg = sh_el_deg
                 self.system_state.curr_max_sh_el = curr_max_sh_el
+                self.system_state.old_sh_el_deg = old_sh_el_deg
+            
+            time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
+class handleEvents(threading.Thread):
+    def __init__(self, name, system_state, emergency_stop, filename, start_event, max_reached):
+        threading.Thread.__init__(self)
+        self.name = name
+        self.system_state = system_state
+        self.filename = filename
+        self.fs = 250
+
+        self.min_sh_el = np.degrees(np.pi/12)
+        self.sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
+        self.start_event = start_event
+        self.max_reached = max_reached
+
+        self.emergency_stop = emergency_stop
+    
+    def run(self):
+        dt = 1.0 / self.fs
+        arm_lowered = False
+
+        while not self.emergency_stop.is_set():
+            next_time_instant = time.perf_counter() + dt
+           
             # For system control, record start and stop events for stimulation
-            # Trigger start event when the angle exceeds the threshold
-            if sh_el_deg >= self.min_sh_el and not self.start_event.is_set() and self.arm_lowered:
+            # Trigger start event when the angle exceeds the threshold (and rising)
+            if (self.system_state.sh_el_deg >= self.min_sh_el and 
+                self.system_state.sh_el_deg > self.system_state.old_sh_el_deg and
+                not self.start_event.is_set() and arm_lowered):
                 print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
                 self.start_event.set()
-                self.arm_lowered = False
-            '''
-            # Trigger stop event when the max angle is reached
-            if sh_el_deg >= self.sh_el_ref and not self.max_reached.is_set():
-                print(f"Max angle {self.sh_el_ref:.2f}° reached. Stopping stimulation.")
-                self.max_reached.set()
-                self.start_event.clear()
-            '''
-            if sh_el_deg <= self.min_sh_el and self.max_reached.is_set():
+                arm_lowered = False
+
+            # When the arm is below the threshold (and lowering), update error and allow for restart
+            if (self.system_state.sh_el_deg < self.min_sh_el and 
+                self.system_state.sh_el_deg < self.system_state.old_sh_el_deg and
+                self.max_reached.is_set()):
                 print(f"Arm has lowered. Max angle for iteration: {curr_max_sh_el:.2f}°")
-                self.arm_lowered = True
+                arm_lowered = True
                 self.max_reached.clear()
                 iteration_max_sh_el = curr_max_sh_el 
                 sh_el_error = self.sh_el_ref - iteration_max_sh_el
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
                 curr_max_sh_el = 0
-                # Ricorda: in questo if l'iterazione non è davvero finita, ma siamo tornati sotto pi/12 (l'angolo max salvato sarà più alto di quello "vero")
-                # è da risolvere o possiamo ignorare la cosa??
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -130,12 +149,11 @@ class FESControl(threading.Thread):
         self.max_current = 0.5 * self.fullrange_current
         self.start_event = start_event
         self.max_reached = max_reached
-        self.T = 2 # duration of the movement
+        self.T = 3 # duration of the movement
 
         self.emergency_stop = emergency_stop
 
     def run(self):
-        self.device.change_mode(1)
         # Waits for start event, stimulates and stops when stop event is set
 
         while not self.emergency_stop.is_set():
@@ -166,9 +184,7 @@ class FESControl(threading.Thread):
                 current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties
                 
                 try:
-                    self.device.set_pulse(current, self.pw)
-                    self.device.start(self.channel, self.period_ms)
-                    self.device.update()
+                    self.device.pulse(self.channel, current, self.pw)
                     time.sleep(max(next_time_instant-time.perf_counter(),0))
                
                 except Exception as e:
@@ -209,7 +225,7 @@ class saveDataLoop(threading.Thread):
         filename = "log.csv" # for development
         with open(filename, 'w') as log:
         
-            file_header = "time,sh_el_deg,sh_el,stim_curr,max_sh_el(deg)\n"
+            file_header = "time,old_sh_el_deg,sh_el_deg,stim_curr\n"
             log.write(file_header)
 
             while not self.emergency_stop.is_set():
@@ -217,13 +233,13 @@ class saveDataLoop(threading.Thread):
                 t = time.perf_counter() - t0
 
                 with lock:
-                    data = "{:.5f},{:.3f},{:.3f},{:.2f},{:.3f}\n".format(t,self.sys_state.sh_el_deg,self.sys_state.sh_el,self.sys_state.stim_current,self.sys_state.curr_max_sh_el)
+                    data = "{:.5f},{:.3f},{:.3f},{:.2f}\n".format(t,self.sys_state.old_sh_el_deg,self.sys_state.sh_el_deg,self.sys_state.stim_current)
                 log.write(data)
 
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
 
 def main():
-    port_name = "COM7" # Windows
+    port_name = "COM9" # Windows
     #port_name = "/dev/ttyUSB0" # Linux
     
     user = input("Your name: ").lower().strip()
@@ -234,20 +250,22 @@ def main():
         channel = "white"
     elif muscle == "m":
         filename = f"{user}_middle_calibration_data.json"
-        channel = "black"
+        channel = "blue"
 
     system_state = systemState()
-    imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
+    imu = Imu(IMU_RECEIVE_PORT, IMU_IP_ADDRESS, IMU_SEND_PORT, IMU_AXIS_UP)
     start_event = threading.Event()
     max_reached = threading.Event()
     emergency_stop = threading.Event()
     
     readImuThread = readImuLoop("Read IMU", system_state, emergency_stop, imu, filename, start_event, max_reached)
+    handleEventsThread = handleEvents("Events", system_state, emergency_stop, filename, start_event, max_reached)
     stimulationThread = FESControl("Stimulation", system_state, emergency_stop, port_name, channel, filename, start_event, max_reached)
     saveDataThread = saveDataLoop("Save data", system_state, emergency_stop, user, muscle)
     
     threads = []
     threads.append(readImuThread)
+    threads.append(handleEventsThread)
     threads.append(stimulationThread)
     threads.append(saveDataThread)
 
