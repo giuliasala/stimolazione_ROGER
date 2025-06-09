@@ -10,9 +10,9 @@ from tdu import Imu
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORTS = 8102
+IMU_RECEIVE_PORT = 8102
 IMU_SEND_PORT = 9000
-IMU_IP_ADDRESSES = "192.168.1.3" # in AP mode
+IMU_IP_ADDRESS = "192.168.1.2" # in AP mode
 
 # Thread Lock
 lock = threading.Lock()
@@ -32,8 +32,9 @@ class readImuLoop(threading.Thread):
         self.filename = filename
         self.duration = 3 # of the movement
 
+        self.initial_sh_el_array = []
         self.initial_sh_el = 0
-        self.max_sh_el = 0
+        self.max_sh_el_array = []
 
     def read_imu_matrix(self):
         # Get the IMUs rotation matrix
@@ -54,13 +55,14 @@ class readImuLoop(threading.Thread):
             next_time_instant = time.perf_counter() + self.dt
             
             IMU_mat = self.read_imu_matrix()
-            self.initial_sh_el = compute_joint_angles(IMU_mat)
+            sh_el = compute_joint_angles(IMU_mat)
+            self.initial_sh_el_array.append(sh_el)
             
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
         
+        self.initial_sh_el = np.median(self.initial_sh_el_array)
         initial_sh_el_deg = np.degrees(self.initial_sh_el)
         print(f"Pre-calibration Shoulder Elevation (deg): {initial_sh_el_deg:.2f}")
-        utils.save_to_json(self.filename, round(self.initial_sh_el, 3), "precalibration_angle (rad)")
         
     def run(self):
         print("Starting IMU reading thread...")
@@ -75,33 +77,38 @@ class readImuLoop(threading.Thread):
         except RuntimeError:
             print("Pre-calibration failed.")
             return
+        utils.save_to_json(self.filename, round(self.initial_sh_el, 3), "precalibration_angle (rad)")
 
-        # Main loop
-        start_time = time.time()
+        for rep in range(3):
+            print(f"Rep {rep+1}")
+            self.max_sh_el = 0
+            start_time = time.time()
         
-        while time.time() - start_time < self.duration:
-            next_time_instant = time.perf_counter() + self.dt
-            
-            IMU_mat = self.read_imu_matrix()
-            sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
-            sh_el_deg = np.degrees(sh_el)
-            self.max_sh_el = max(self.max_sh_el, sh_el)
-            
-            print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
+            while time.time() - start_time < self.duration:
+                next_time_instant = time.perf_counter() + self.dt
+                
+                IMU_mat = self.read_imu_matrix()
+                sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
+                sh_el_deg = np.degrees(sh_el)
+                self.max_sh_el = max(self.max_sh_el, sh_el)
+                
+                print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 
-            time.sleep(max(next_time_instant - time.perf_counter(), 0))
+                time.sleep(max(next_time_instant - time.perf_counter(), 0))
+            
+            max_sh_el_deg = np.degrees(self.max_sh_el)
+            max_sh_el_deg = np.minimum(max_sh_el_deg, 130.00) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
+            print(f"Maximum Shoulder Elevation (deg) for rep {rep+1}: {max_sh_el_deg:.2f}")
+            self.max_sh_el_array.append(max_sh_el_deg)
         
-        max_sh_el_deg = np.degrees(self.max_sh_el)
-        max_sh_el_deg = np.minimum(max_sh_el_deg, 130.00) # Cap at 130 to avoid singularity at 170 degrees (by Elena)
-        print(f"Maximum Shoulder Elevation (deg): {max_sh_el_deg:.2f}")
-        
-        utils.save_to_json(self.filename, round(max_sh_el_deg, 3), "max_angle (deg)")
-        
+        final_max_angle = np.mean(self.max_sh_el_array)
+        utils.save_to_json(self.filename, round(final_max_angle, 3), "max_angle (deg)")
+            
         print("Calibration complete.")
 
 if __name__ == "__main__":
 
-    imu = Imu(IMU_RECEIVE_PORTS, IMU_IP_ADDRESSES, IMU_SEND_PORT, IMU_AXIS_UP)
+    imu = Imu(IMU_RECEIVE_PORT, IMU_IP_ADDRESS, IMU_SEND_PORT, IMU_AXIS_UP)
     
     user = input("Your name: ").lower().strip()
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
