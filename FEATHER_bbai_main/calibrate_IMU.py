@@ -12,7 +12,7 @@ from tdu import Imu
 IMU_AXIS_UP = 'Y'
 IMU_RECEIVE_PORT = 8102
 IMU_SEND_PORT = 9000
-IMU_IP_ADDRESS = "192.168.1.2" # in AP mode
+IMU_IP_ADDRESS = "192.168.1.1" # in AP mode
 
 # Thread Lock
 lock = threading.Lock()
@@ -30,7 +30,7 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.dt = 1.0 / self.imu_fs
         self.filename = filename
-        self.duration = 3 # of the movement
+        self.duration = 4 # of the movement
         self.pre_duration = 3 # for pre-calibration
 
         self.initial_sh_el_array = []
@@ -95,6 +95,8 @@ class readImuLoop(threading.Thread):
                 sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
                 sh_el_deg = np.degrees(sh_el)
                 self.max_sh_el = max(self.max_sh_el, sh_el)
+
+                angle_trace.append((time.time(), sh_el_deg))
                 
                 print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 

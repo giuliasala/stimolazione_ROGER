@@ -1,10 +1,9 @@
-import math
 import matplotlib.pyplot as plt
 import numpy as np
 
 def beta_function(tingle_current, max_current, T, t):
-        slope = 20 / T
-        i = tingle_current + (max_current - tingle_current) * np.sqrt(1 / (1 + np.exp(-slope * (t - T/2))))
+        slope = 25 / T
+        i = tingle_current + (max_current - tingle_current) * np.sqrt(1 / (1 + np.exp(-slope * (t - T/2.5))))
         return i
 
 def step_beta_function(i):

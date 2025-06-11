@@ -73,7 +73,7 @@ class readImuLoop(threading.Thread):
             old_sh_el_deg = self.system_state.sh_el_deg
             sh_el = compute_joint_angles(IMU_mat) - self.precalibration_angle
             sh_el_deg = np.degrees(sh_el)
-            curr_max_sh_el = max(curr_max_sh_el, sh_el_deg)
+            curr_max_sh_el = max(self.system_state.curr_max_sh_el, sh_el_deg)
             
             with lock:
                 self.system_state.UA_mat = IMU_mat
@@ -101,7 +101,7 @@ class handleEvents(threading.Thread):
     
     def run(self):
         dt = 1.0 / self.fs
-        arm_lowered = False
+        arm_lowered = True
 
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
@@ -116,17 +116,20 @@ class handleEvents(threading.Thread):
                 arm_lowered = False
 
             # When the arm is below the threshold (and lowering), update error and allow for restart
+            # print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}")
             if (self.system_state.sh_el_deg < self.min_sh_el and 
                 self.system_state.sh_el_deg < self.system_state.old_sh_el_deg and
                 self.max_reached.is_set()):
-                print(f"Arm has lowered. Max angle for iteration: {curr_max_sh_el:.2f}°")
-                arm_lowered = True
+                print(f"Arm has lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")
+
+                arm_lowered = True                
                 self.max_reached.clear()
-                iteration_max_sh_el = curr_max_sh_el 
+
+                iteration_max_sh_el = self.system_state.curr_max_sh_el 
                 sh_el_error = self.sh_el_ref - iteration_max_sh_el
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
-                curr_max_sh_el = 0
+                    self.system_state.curr_max_sh_el = 0
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -201,7 +204,6 @@ class FESControl(threading.Thread):
                 self.max_reached.set() 
                 self.start_event.clear()
 
-            self.device.end()
             print("Stimulation stopped")
             with lock:
                 self.system_state.stim_current = 0
