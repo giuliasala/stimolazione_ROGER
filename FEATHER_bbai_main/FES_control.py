@@ -170,7 +170,7 @@ class FESControl(threading.Thread):
             current = self.tingle_current
 
             sh_el_error = self.system_state.sh_el_error
-            self.max_current = self.max_current + 0.1 * sh_el_error
+            self.max_current = self.max_current + 0.05 * sh_el_error
             self.max_current = round(self.max_current*2) / 2
             if self.max_current > self.pain_current:
                 self.max_current = self.pain_current - 0.5 # con pain_current o fullrange_current??
