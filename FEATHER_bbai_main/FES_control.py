@@ -120,34 +120,34 @@ class handleEvents(threading.Thread):
 
             # For system control, record events to control stimulation
 
-            # Trigger start event when the angle of contralateral arm exceeds the threshold and it's rising
+            # Trigger start event when the angle of contralateral arm exceeds the angle of the impaired arm (and a given threshold) and it's rising
             if (self.system_state.contralateral_sh_el_deg >= self.min_sh_el and 
+                self.system_state.contralateral_sh_el_deg >= self.system_state.sh_el_deg and
                 self.system_state.contralateral_sh_el_deg > self.system_state.old_contr_sh_el_deg and 
                 not self.start_event.is_set() and arms_lowered):
                 print(f"Threshold angle {self.min_sh_el:.2f}° reached. Starting stimulation.")
                 self.start_event.set()
                 arms_lowered = False
+            
+            # Make sure that, before triggering a new start, contralateral arm is below threshold
+            # Don't make sure that impaired arm is below threshold, because pre-tension of ROGER always keeps the arm above it -> need to also 
+            # make sure that contralateral arm is below ipsilateral arm
+            if (self.system_state.contralateral_sh_el_deg < self.min_sh_el and
+                self.system_state.contralateral_sh_el_deg <= self.system_state.sh_el_deg):
 
-            # When the assisted arm is below the threshold (and lowering), update error and clear event
-            #print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}")
-            if (self.system_state.sh_el_deg < self.min_sh_el and
-                self.system_state.sh_el_deg < self.system_state.old_sh_el_deg  and
-                self.max_reached.is_set()):
-                print(f"Assisted arm has lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")
-                iteration_max_sh_el = self.system_state.curr_max_sh_el 
-                sh_el_error = self.sh_el_ref - iteration_max_sh_el
-                with lock:
-                    self.system_state.sh_el_error = sh_el_error
-                    self.system_state.curr_max_sh_el = 0               
-                self.max_reached.clear()
-
-            # Make sure that, before triggering a new start, both arms are below threshold
-            if (self.system_state.sh_el_deg < self.min_sh_el and 
-                self.system_state.contralateral_sh_el_deg < self.min_sh_el and 
-                not self.start_event.is_set()):
-                if not arms_lowered:
-                    print("Both arms lowered, ready for new stimulation.")
-                arms_lowered = True
+                if self.max_reached.is_set():
+                    print(f"Assisted arm has lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")
+                    iteration_max_sh_el = self.system_state.curr_max_sh_el 
+                    sh_el_error = self.sh_el_ref - iteration_max_sh_el
+                    with lock:
+                        self.system_state.sh_el_error = sh_el_error
+                        self.system_state.curr_max_sh_el = 0             
+                    self.max_reached.clear()
+               
+                if not self.start_event.is_set():
+                    if not arms_lowered:
+                        print("Both arms lowered, ready for new stimulation.")
+                    arms_lowered = True
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -188,7 +188,7 @@ class FESControl(threading.Thread):
             current = self.tingle_current
 
             sh_el_error = self.system_state.sh_el_error
-            self.max_current = self.max_current + 0.1 * sh_el_error
+            self.max_current = self.max_current + 0.05 * sh_el_error
             self.max_current = round(self.max_current*2) / 2
             if self.max_current > self.pain_current:
                 self.max_current = self.pain_current - 0.5 # con pain_current o fullrange_current??
