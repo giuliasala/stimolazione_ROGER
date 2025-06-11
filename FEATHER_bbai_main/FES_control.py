@@ -149,7 +149,8 @@ class FESControl(threading.Thread):
         self.max_current = 0.5 * self.fullrange_current
         self.start_event = start_event
         self.max_reached = max_reached
-        self.T = 3 # duration of the movement
+        self.movement_duration = utils.load_from_json(self.filename, "movement_duration")
+        self.T = self.movement_duration + 1 # add one second for holding the arm up (see beta_function)
 
         self.emergency_stop = emergency_stop
 
