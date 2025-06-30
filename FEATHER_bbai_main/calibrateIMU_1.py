@@ -86,6 +86,8 @@ class readImuLoop(threading.Thread):
             print(f"Rep {rep+1}")
             self.max_sh_el = 0
             angle_trace = []  # List to store (timestamp, angle_deg)
+            last_sh_el = None
+            velocity = 0
             start_time = time.time()
         
             while time.time() - start_time < self.duration:
@@ -95,10 +97,14 @@ class readImuLoop(threading.Thread):
                 sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
                 sh_el_deg = np.degrees(sh_el)
                 self.max_sh_el = max(self.max_sh_el, sh_el)
-
-                angle_trace.append((time.time(), sh_el_deg))
-                
                 print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
+
+                if last_sh_el is not None:
+                    velocity = (sh_el_deg - last_sh_el) / self.dt
+                    print(f"Velocity:{velocity:.2f} deg/s")
+                last_sh_el = sh_el_deg
+
+                angle_trace.append((time.time(), sh_el_deg, velocity))
 
                 time.sleep(max(next_time_instant - time.perf_counter(), 0))
             
@@ -108,15 +114,14 @@ class readImuLoop(threading.Thread):
             self.max_sh_el_array.append(max_sh_el_deg)
 
             # Find movement start and end times
-            min_angle_deg = 5
+            vel_threshold = 100     # deg/s
+            vel_tolerance = 10
             movement_start = None
             movement_end = None
-            for t, a in angle_trace:
-                if a > min_angle_deg:
+            for t, a, v in angle_trace:
+                if v > vel_threshold and movement_start is None:
                     movement_start = t
-                    break
-            for t, a in angle_trace:
-                if abs(a - max_sh_el_deg) < 0.01:  # tolerance for float comparison
+                if (a == max_sh_el_deg or v + vel_tolerance < 0) and movement_start is not None:
                     movement_end = t
                     break
             if movement_start and movement_end:

@@ -28,7 +28,7 @@ def calibrate_rehamove(port_name, channel, filename):
         r.change_mode(1)     # Change to mid level (0-low, 1-mid)
 
         # Set frequency and duration of contraction
-        freq = 40    # Hz
+        freq = 30    # Hz
         period = 1/freq * 1000    # ms
         duration = 0.5     # s
         
@@ -96,12 +96,12 @@ def calibrate_rehamove(port_name, channel, filename):
 
 if __name__ == '__main__':
     
-    port_name = "COM9" # Windows
+    port_name = "COM7" # Windows
     #port_name = "/dev/ttyUSB0" # Linux
 
     user = input("Your name: ").lower().strip()
-    channel = input("Channel colour (white for anterior, blue for middle): ").lower().strip()
-    if channel == "white":
+    channel = input("Channel colour (red for anterior, blue for middle): ").lower().strip()
+    if channel == "red":
         filename = f"{user}_anterior_calibration_data.json"
     elif channel == "blue":
         filename = f"{user}_middle_calibration_data.json"

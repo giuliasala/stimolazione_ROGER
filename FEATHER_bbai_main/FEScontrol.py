@@ -104,7 +104,7 @@ class handleEvents(threading.Thread):
         self.filename = filename
         self.fs = 250 # same as imu fs
 
-        self.min_sh_el = np.degrees(np.pi/12)
+        self.min_sh_el = 10
         self.sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
         self.start_event = start_event
         self.max_reached = max_reached
@@ -163,11 +163,9 @@ class FESControl(threading.Thread):
         self.period_ms = 1/self.freq * 1000
         self.period_s = 1/self.freq
         self.pw = 400
-        self.tingle_current = utils.load_from_json(self.filename, "tingling_current")
         self.min_current = utils.load_from_json(self.filename, "movement_current")
         self.pain_current = utils.load_from_json(self.filename, "pain_current")
-        self.fullrange_current = utils.load_from_json(self.filename, "full_range_current")
-        self.max_current = 0.5 * self.fullrange_current
+        self.max_current = 0.7 * self.pain_current
         self.start_event = start_event
         self.max_reached = max_reached
         self.movement_duration = utils.load_from_json(self.filename, "movement_duration")
@@ -185,15 +183,15 @@ class FESControl(threading.Thread):
                 break
             self.start_event.wait()
             print("Stimulation started")
-            current = self.tingle_current
+            current = self.min_current
 
             sh_el_error = self.system_state.sh_el_error
             self.max_current = self.max_current + 0.05 * sh_el_error
             self.max_current = round(self.max_current*2) / 2
             if self.max_current > self.pain_current:
-                self.max_current = self.pain_current - 0.5 # con pain_current o fullrange_current??
-            if self.max_current < self.tingle_current:
-                self.max_current = self.tingle_current
+                self.max_current = self.pain_current - 0.5
+            if self.max_current < self.min_current:
+                self.max_current = self.min_current
 
             start_time = time.perf_counter()
             t = 0
@@ -202,7 +200,7 @@ class FESControl(threading.Thread):
                 next_time_instant = time.perf_counter() + self.period_s
                 t = time.perf_counter() - start_time
                 print("time t:", t)
-                i = beta_function(self.tingle_current, self.max_current, self.T ,t) # theoretical current (continuous function)
+                i = beta_function(self.min_current, self.max_current, self.T ,t) # theoretical current (continuous function)
                 current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties
                 
                 try:
