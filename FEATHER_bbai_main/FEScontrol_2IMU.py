@@ -159,7 +159,7 @@ class FESControl(threading.Thread):
         self.channel = channel
         self.filename = filename
         self.device = Rehamove(port_name)
-        self.freq = 40
+        self.freq = 30
         self.period_ms = 1/self.freq * 1000
         self.period_s = 1/self.freq
         self.pw = 400
