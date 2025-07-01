@@ -1,6 +1,6 @@
-#from communication import motorCommunication
+from communication import motorCommunication
 from communication import imuCommunication as ic
-#from communication import loadCellCommunication as lcc
+from communication import loadCellCommunication as lcc
 
 import digital_filters as filt
 
@@ -228,7 +228,7 @@ class Imu():
 
     def initialize(self, dt):
         # Linux
-        '''
+        
         # BeagleBone Public IP address
         for name, interface in ifcfg.interfaces().items():
             if interface['device'] == "wlan0":      # Device name
@@ -242,7 +242,7 @@ class Imu():
         IPAddr = socket.gethostbyname(socket.gethostname())
         print("Detected local IP Address:", IPAddr)
         self.set_imu_send_ip(IPAddr)
-        
+        '''
         self.receive_socket = ic.init_receive_socket(self.receive_port)
         self.send_socket = ic.init_send_socket()
         

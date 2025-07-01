@@ -4,13 +4,52 @@ from rehamove import *
 
 import time
 import numpy as np
-import keyboard
+import sys
+import threading
+import tty
+import termios
+import select
 
 import utils
+
+# Shared dictionary for key events
+key_events = {
+    'tingling_current': None,
+    'movement_current': None,
+    'full_range_current': None,
+    'pain_current': None,
+}
+key_lock = threading.Lock()
+
+def key_listener():
+    print("Press 'j' for tingling, 'k' for movement, 'l' for full range, 'p' for pain (follow instructions).")
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while True:
+            ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+            if ready:
+                key = sys.stdin.read(1).lower()
+                with key_lock:
+                    if key == 'j':
+                        key_events['tingling_current'] = True
+                    elif key == 'k':
+                        key_events['movement_current'] = True
+                    elif key == 'l':
+                        key_events['full_range_current'] = True
+                    elif key == 'p':
+                        key_events['pain_current'] = True
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 def calibrate_rehamove(port_name, channel, filename):
 
     try:
+        # Start key listener thread
+        listener_thread = threading.Thread(target=key_listener, daemon=True)
+        listener_thread.start()
+
         # Open USB port
         r = Rehamove(port_name)
 
@@ -48,6 +87,11 @@ def calibrate_rehamove(port_name, channel, filename):
             }
 
             print("Press 'j' when tingling is detected, 'k' for movement, 'l' for full range, 'p' for pain.")
+            
+            # Reset key events for this repetition
+            with key_lock:
+                for k in key_events:
+                    key_events[k] = None
 
             while current <= max_current:
 
@@ -62,23 +106,17 @@ def calibrate_rehamove(port_name, channel, filename):
                 
                 # Interacting with user
                 
-                if keyboard.is_pressed('j') and thresholds['tingling_current'] is None:
-                    thresholds['tingling_current'] = current
+                # Check key events (non-blocking)
+                with key_lock:
+                    for k in thresholds:
+                        if key_events[k] and thresholds[k] is None:
+                            thresholds[k] = current
+                            key_events[k] = None  # Reset so it doesn't trigger again
 
-                elif keyboard.is_pressed('k') and thresholds['movement_current'] is None:
-                    thresholds['movement_current'] = current
-                    
-                elif keyboard.is_pressed('l') and thresholds['full_range_current'] is None:
-                    thresholds['full_range_current'] = current
-                
-                elif keyboard.is_pressed('p') and thresholds['pain_current'] is None:
-                    thresholds['pain_current'] = current
-                    
                 if thresholds['pain_current'] is not None:
                     break
 
                 r.update()
-
                 # Increment current and pulse width
                 current += 0.5
 
@@ -106,8 +144,8 @@ def calibrate_rehamove(port_name, channel, filename):
 
 if __name__ == '__main__':
     
-    port_name = "COM7" # Windows
-    #port_name = "/dev/ttyUSB0" # Linux
+    #port_name = "COM7" # Windows
+    port_name = "/dev/ttyUSB0" # Linux
 
     user = input("Your name: ").lower().strip()
     channel = input("Channel colour (red for anterior, blue for middle): ").lower().strip()
