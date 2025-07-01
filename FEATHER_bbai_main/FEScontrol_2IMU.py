@@ -4,7 +4,6 @@ import threading
 import time
 from datetime import datetime
 import numpy as np
-import math
 import keyboard
 
 from rehamove import *
@@ -117,9 +116,10 @@ class handleEvents(threading.Thread):
 
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
-
+            
+            print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}, arm_lowered: {arms_lowered}, max_reached: {self.max_reached.is_set()}")
+            
             # For system control, record events to control stimulation
-
             # Trigger start event when the angle of contralateral arm exceeds the angle of the impaired arm (and a given threshold) and it's rising
             if (self.system_state.contralateral_sh_el_deg >= self.min_sh_el and 
                 self.system_state.contralateral_sh_el_deg >= self.system_state.sh_el_deg and
@@ -169,7 +169,9 @@ class FESControl(threading.Thread):
         self.start_event = start_event
         self.max_reached = max_reached
         self.movement_duration = utils.load_from_json(self.filename, "movement_duration")
-        self.T = self.movement_duration + 1 # add one second for holding the arm up (see beta_function)
+        mean_velocity = utils.load_from_json(self.filename, "mean_velocity")
+        self.delta_t = 10 / mean_velocity
+        self.T = self.movement_duration - 2 * self.delta_t
 
         self.emergency_stop = emergency_stop
 
@@ -196,17 +198,19 @@ class FESControl(threading.Thread):
             start_time = time.perf_counter()
             t = 0
 
-            while not self.emergency_stop.is_set() and current <= self.max_current and t < self.T:
+            while not self.emergency_stop.is_set() and current <= self.max_current and t < (self.movement_duration - self.delta_t):
                 next_time_instant = time.perf_counter() + self.period_s
                 t = time.perf_counter() - start_time
                 print("time t:", t)
-                i = beta_function(self.min_current, self.max_current, self.T ,t) # theoretical current (continuous function)
-                current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties
-                
+                if t <= self.T:     # beta function with duration T = movement duration - 2*time it takes to get to 10°
+                    i = beta_function(self.min_current, self.max_current, self.T ,t) # theoretical current (continuous function)
+                    current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties
+                elif t > self.T:     # the last ms (time it takes to get to 10°) we give constant max current
+                    i = self.max_current
+               
                 try:
                     self.device.pulse(self.channel, current, self.pw)
                     time.sleep(max(next_time_instant-time.perf_counter(),0))
-               
                 except Exception as e:
                     print(f"Error during stimulation: {e}")
                     break
@@ -214,11 +218,9 @@ class FESControl(threading.Thread):
                 with lock:
                         self.system_state.stim_current = current
             
-            # if max current is reached, even without reaching the angle, allow to restart
-            if current >= self.max_current:
-                print("Max current reached. Stopping stimulation")
-                self.max_reached.set() 
-                self.start_event.clear()
+            # Allow to restart
+            self.max_reached.set() 
+            self.start_event.clear()
 
             print("Stimulation stopped")
             with lock:

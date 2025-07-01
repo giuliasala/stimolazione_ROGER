@@ -138,8 +138,10 @@ class readImuLoop(threading.Thread):
                         
             final_max_angle = np.mean(self.max_sh_el_array)
             final_duration = np.mean(self.duration_array)
+            mean_velocity = final_max_angle / final_duration
             utils.save_to_json(self.filename, round(final_max_angle, 3), "max_angle (deg)")
             utils.save_to_json(self.filename, round(final_duration, 3), "movement_duration")
+            utils.save_to_json(self.filename, round(mean_velocity, 3), "mean_velocity")
             
         print("Calibration complete.")
 
