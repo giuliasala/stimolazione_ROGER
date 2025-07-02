@@ -21,6 +21,7 @@ import threading
 import time
 import warnings
 import os
+from multiprocessing import shared_memory
 
 from datetime import datetime
 
@@ -110,12 +111,15 @@ else:
 
 print(sh_friction_pp)
 
+# Imu instance is created in IMU_forwarder.py (for 1 IMU only, shoulder)
+'''
 # IMU parameters from NGIMU GUI - The first is the upper arm, the second is the forearm
 IMU_AXIS_UP = 'Y'
 IMU_RECEIVE_PORTS = [8101,8102]
 IMU_SEND_PORT = 9000
 IMU_IP_ADDRESSES = ["192.168.1.1","192.168.0.102"] # in AP mode only for IMU 1
 #IMU_IP_ADDRESSES = ["192.168.0.101","192.168.0.102"] #when in client mode the IP will look more like this
+'''
 
 # Thread Lock
 lock = threading.Lock()
@@ -178,6 +182,13 @@ class kalmanFilter():
 
         # Return position and velocity estimates
         return self.x[0], self.x[1]
+
+def get_latest_imu_matrix():
+    shm = shared_memory.SharedMemory(name='imu_matrix')
+    np_array = np.ndarray((9,), dtype=np.float64, buffer=shm.buf)
+    mat = np_array.copy()
+    shm.close()
+    return mat.reshape((3,3))
 
 def compute_joint_angles(UA_mat,FA_mat): #TO DO: make possible to choose between simple and complex
     # Get the current shoulder elevation angle and elbow flexion
@@ -545,11 +556,10 @@ class readLoadCellLoop(threading.Thread):
             time.sleep(max(next_time_instant-time.perf_counter(),0))
             
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, imu, segment):
+    def __init__(self, name, system_state, segment):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
-        self.imu = imu
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.segment = segment
 
@@ -557,16 +567,13 @@ class readImuLoop(threading.Thread):
         print("Starting IMU reading thread...")
         
         dt = 1.0 / self.imu_fs
-        self.imu.initialize(dt)
-        self.imu.identify() # Strobe IMU leds to identify it
         IMU_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
         
         while rcpy.get_state() != rcpy.EXITING:
-            next_time_instant = time.perf_counter() + (1.0 / self.imu_fs)
+            next_time_instant = time.perf_counter() + (dt)
             # Get the IMUs rotation matrices
             try:
-                IMU_m = self.imu.read_imu()
-                IMU_mat = np.matrix([[IMU_m[0],IMU_m[1],IMU_m[2]],[IMU_m[3],IMU_m[4],IMU_m[5]],[IMU_m[6],IMU_m[7],IMU_m[8]]])
+                IMU_mat = get_latest_imu_matrix()
             except:
                 pass
                 
@@ -752,9 +759,12 @@ def main():
     
     control_mode = "torque"
     
+    # Not necessary as it is done in IMU_forwarder.py (integration with FES)
+    '''
     # IMU1 is assigned to upper arm, IMU2 to forearm
     imu1 = Imu(IMU_RECEIVE_PORTS[0], IMU_IP_ADDRESSES[0], IMU_SEND_PORT, IMU_AXIS_UP)
     imu2 = Imu(IMU_RECEIVE_PORTS[1], IMU_IP_ADDRESSES[1], IMU_SEND_PORT, IMU_AXIS_UP)
+    '''
     
     with lock:
         system_state.trigger = 0
@@ -766,8 +776,8 @@ def main():
     motor2ControlThread = motorControlLoop("Motor 2 control", system_state, motor2, control_mode)
     readCANBusLoopThread = readCANBusLoop("CAN Bus Reading", system_state, [motor1,motor2])
     readLoadCellThread = readLoadCellLoop("Read load cell", system_state)
-    readImu1Thread = readImuLoop("Read IMU 1", system_state, imu1, "ua")
-    readImu2Thread = readImuLoop("Read IMU 2", system_state, imu2, "fa")
+    readImu1Thread = readImuLoop("Read IMU 1", system_state, "ua")
+    readImu2Thread = readImuLoop("Read IMU 2", system_state, "fa")
     computeAssistanceThread = computeAssistance("Compute assistance", system_state)
     readBatteryVoltageThread = readBatteryVoltageLoop("Read Battery Voltage", system_state)
     saveDataThread = saveDataLoop("Save data", system_state)

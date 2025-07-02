@@ -4,18 +4,13 @@ import threading
 import time
 import datetime
 import numpy as np
+from multiprocessing import shared_memory
 
 from rehamove import *
 
 import utils
 from tdu import Imu
 from beta_function import beta_function
-
-# IMU parameters from NGIMU GUI
-IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORT = 8102
-IMU_SEND_PORT = 9000
-IMU_IP_ADDRESS = "192.168.1.1" # in AP mode
 
 # Thread Lock
 lock = threading.Lock()
@@ -29,18 +24,24 @@ class systemState():
     stim_current = 0
     sh_el_error = 0
 
+def get_latest_imu_matrix():
+    shm = shared_memory.SharedMemory(name='imu_matrix')
+    np_array = np.ndarray((9,), dtype=np.float64, buffer=shm.buf)
+    mat = np_array.copy()  # Copy to avoid race conditions
+    shm.close()
+    return mat.reshape((3,3))
+
 def compute_joint_angles(UA_mat):
     # Get the current shoulder elevation angle
     sh_el = np.arccos(UA_mat[2,1]) #element z of y axis
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, emergency_stop, imu, filename, start_event, max_reached):
+    def __init__(self, name, system_state, emergency_stop, filename):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
-        self.imu = imu
-        self.imu_fs = 200 # Need to read faster than IMU update frequency
+        self.imu_fs = 200
         self.filename = filename
         self.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
 
@@ -50,8 +51,6 @@ class readImuLoop(threading.Thread):
         print("Starting IMU reading thread...")
         
         dt = 1.0 / self.imu_fs
-        self.imu.initialize(dt)
-        self.imu.identify() # Strobe IMU leds to identify it
         IMU_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
         curr_max_sh_el = 0
 
@@ -60,10 +59,7 @@ class readImuLoop(threading.Thread):
             
             # Get the IMUs rotation matrices
             try:
-                IMU_m = self.imu.read_imu()
-                IMU_mat = np.matrix([[IMU_m[0],IMU_m[1],IMU_m[2]],
-                                     [IMU_m[3],IMU_m[4],IMU_m[5]],
-                                     [IMU_m[6],IMU_m[7],IMU_m[8]]])
+                IMU_mat = get_latest_imu_matrix()
             except Exception as e:
                 print("IMU read error:", e)
                 pass
@@ -255,12 +251,11 @@ def main():
         channel = "blue"
 
     system_state = systemState()
-    imu = Imu(IMU_RECEIVE_PORT, IMU_IP_ADDRESS, IMU_SEND_PORT, IMU_AXIS_UP)
     start_event = threading.Event()
     max_reached = threading.Event()
     emergency_stop = threading.Event()
     
-    readImuThread = readImuLoop("Read IMU", system_state, emergency_stop, imu, filename, start_event, max_reached)
+    readImuThread = readImuLoop("Read IMU", system_state, emergency_stop, filename, start_event, max_reached)
     handleEventsThread = handleEvents("Events", system_state, emergency_stop, filename, start_event, max_reached)
     stimulationThread = FESControl("Stimulation", system_state, emergency_stop, port_name, channel, filename, start_event, max_reached)
     saveDataThread = saveDataLoop("Save data", system_state, emergency_stop, user, muscle)
