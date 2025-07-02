@@ -21,7 +21,7 @@ import threading
 import time
 import warnings
 import os
-from multiprocessing import shared_memory
+from shared_memory import shared_memory  # for Python 3.7
 
 from datetime import datetime
 

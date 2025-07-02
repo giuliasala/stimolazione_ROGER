@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 
 import numpy as np
-from multiprocessing import shared_memory
 import time
+from shared_memory import shared_memory  # for Python 3.7
+
 from tdu import Imu
 
 # IMU parameters from NGIMU GUI
