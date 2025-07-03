@@ -102,7 +102,7 @@ class readImuLoop(threading.Thread):
                     sh_el = compute_joint_angles(IMU_mat) - self.initial_sh_el
                     sh_el_deg = np.degrees(sh_el)
                     self.max_sh_el = max(self.max_sh_el, sh_el)
-                    print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
+                    #print(f"Shoulder Elevation (deg): {sh_el_deg:.2f}")
 
                     if last_sh_el is not None:
                         velocity = (sh_el_deg - last_sh_el) / self.dt

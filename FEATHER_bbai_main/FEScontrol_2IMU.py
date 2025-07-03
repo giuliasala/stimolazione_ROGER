@@ -115,7 +115,7 @@ class handleEvents(threading.Thread):
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
             
-            print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}, arm_lowered: {arms_lowered}, max_reached: {self.max_reached.is_set()}")
+            #print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}, arm_lowered: {arms_lowered}, max_reached: {self.max_reached.is_set()}")
             
             # For system control, record events to control stimulation
             # Trigger start event when the angle of contralateral arm exceeds the angle of the impaired arm (and a given threshold) and it's rising
