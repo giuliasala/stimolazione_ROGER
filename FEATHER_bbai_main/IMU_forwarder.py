@@ -8,7 +8,7 @@ from tdu import Imu
 
 # IMU parameters from NGIMU GUI
 IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORT = 8101
+IMU_RECEIVE_PORT = 8102
 IMU_SEND_PORT = 9000
 IMU_IP_ADDRESS = "192.168.1.1"
 

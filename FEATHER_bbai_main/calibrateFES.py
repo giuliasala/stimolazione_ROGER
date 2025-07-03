@@ -74,6 +74,8 @@ def calibrate_rehamove(port_name, channel, filename):
         
         all_thresholds = []
         for rep in range(3):
+            input(f"\nReady to start repetition {rep + 1}? Press Enter to continue...")
+            
             # Set parameters
             pw = 400     # us
             current = 0     # mA
