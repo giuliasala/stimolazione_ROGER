@@ -109,7 +109,7 @@ class readImuLoop(threading.Thread):
                         print(f"Velocity:{velocity:.2f} deg/s")
                     last_sh_el = sh_el_deg
 
-                    angle_trace.append((time.time(), sh_el_deg))
+                    angle_trace.append((time.time(), sh_el_deg, velocity))
 
                     time.sleep(max(next_time_instant - time.perf_counter(), 0))
                 
