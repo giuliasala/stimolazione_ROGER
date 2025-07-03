@@ -4,19 +4,12 @@ import threading
 import time
 from datetime import datetime
 import numpy as np
-import keyboard
+from shared_memory import shared_memory  # for Python 3.7
 
 from rehamove import *
 
 import utils
-from tdu import Imu
 from beta_function import beta_function
-
-# IMU parameters from NGIMU GUI
-IMU_AXIS_UP = 'Y'
-IMU_RECEIVE_PORTS = [8100, 8102]
-IMU_SEND_PORT = 9000
-IMU_IP_ADDRESSES = ["192.168.0.101","192.168.0.102"] # in client mode
 
 # Thread Lock
 lock = threading.Lock()
@@ -32,17 +25,23 @@ class systemState():
     stim_current = 0
     sh_el_error = 0
 
+def get_latest_imu_matrix(name):
+    shm = shared_memory.SharedMemory(name)
+    np_array = np.ndarray((9,), dtype=np.float64, buffer=shm.buf)
+    mat = np_array.copy()  # Copy to avoid race conditions
+    shm.close()
+    return mat.reshape((3,3))
+
 def compute_joint_angles(UA_mat):
     # Get the current shoulder elevation angle
     sh_el = np.arccos(UA_mat[2,1]) #element z of y axis
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, system_state, emergency_stop, imu, filename, contralateral):
+    def __init__(self, name, system_state, emergency_stop, filename, contralateral):
         threading.Thread.__init__(self)
         self.name = name
         self.system_state = system_state
-        self.imu = imu
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.filename = filename
         self.contralateral = contralateral
@@ -55,24 +54,18 @@ class readImuLoop(threading.Thread):
         print("Starting IMU reading thread...")
         
         dt = 1.0 / self.imu_fs
-        self.imu.initialize(dt)
-        self.imu.identify() # Strobe IMU leds to identify it
         IMU_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
 
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
             
-            # Get the IMUs rotation matrices
-            try:
-                IMU_m = self.imu.read_imu()
-                IMU_mat = np.matrix([[IMU_m[0],IMU_m[1],IMU_m[2]],
-                                     [IMU_m[3],IMU_m[4],IMU_m[5]],
-                                     [IMU_m[6],IMU_m[7],IMU_m[8]]])
-            except Exception as e:
-                print("IMU read error:", e)
-                pass
-            
+            # Get the IMUs rotation matrices            
             if not self.contralateral:
+                try:
+                    IMU_mat = get_latest_imu_matrix('imu_matrix')
+                except Exception as e:
+                    print("IMU read error:", e)
+                    pass
                 old_sh_el_deg = self.system_state.sh_el_deg
                 sh_el = compute_joint_angles(IMU_mat) - self.precalibration_angle
                 sh_el_deg = np.degrees(sh_el)
@@ -86,6 +79,11 @@ class readImuLoop(threading.Thread):
                     self.system_state.old_sh_el_deg = old_sh_el_deg
 
             elif self.contralateral:
+                try:
+                    IMU_mat = get_latest_imu_matrix('imu_matrix_contra')
+                except Exception as e:
+                    print("IMU read error:", e)
+                    pass
                 old_contr_sh_el_deg = self.system_state.contralateral_sh_el_deg
                 contralateral_sh_el = compute_joint_angles(IMU_mat) - self.contralateral_precalibration_angle
                 contralateral_sh_el_deg = np.degrees(contralateral_sh_el)
@@ -274,14 +272,12 @@ def main():
         channel = "blue"
 
     system_state = systemState()
-    imu1 = Imu(IMU_RECEIVE_PORTS[0], IMU_IP_ADDRESSES[0], IMU_SEND_PORT, IMU_AXIS_UP)
-    imu2 = Imu(IMU_RECEIVE_PORTS[1], IMU_IP_ADDRESSES[1], IMU_SEND_PORT, IMU_AXIS_UP)
     start_event = threading.Event()
     max_reached = threading.Event()
     emergency_stop = threading.Event()
     
-    readImu1Thread = readImuLoop("Read IMU", system_state, emergency_stop, imu1, filename, contralateral=False)
-    readImu2Thread = readImuLoop("Read IMU", system_state, emergency_stop, imu2, filename, contralateral=True)
+    readImu1Thread = readImuLoop("Read IMU", system_state, emergency_stop, filename, contralateral=False)
+    readImu2Thread = readImuLoop("Read IMU", system_state, emergency_stop, filename, contralateral=True)
     handleEventsThread = handleEvents("Events", system_state, emergency_stop, filename, start_event, max_reached)
     stimulationThread = FESControl("Stimulation", system_state, emergency_stop, port_name, channel, filename, start_event, max_reached)
     saveDataThread = saveDataLoop("Save data", system_state, emergency_stop, user, muscle)
@@ -296,12 +292,12 @@ def main():
     for t in threads:
         t.start()
 
-    while not emergency_stop.is_set():
-        if keyboard.is_pressed('esc'):
-            print("\nEMERGENCY STOP TRIGGERED!")
-            emergency_stop.set()
-            break
-        time.sleep(0.1)
+    try:
+        while not emergency_stop.is_set():
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("\nEMERGENCY STOP TRIGGERED!")
+        emergency_stop.set()
 
     for t in threads:
         t.join()

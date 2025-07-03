@@ -9,7 +9,6 @@ from shared_memory import shared_memory  # for Python 3.7
 from rehamove import *
 
 import utils
-from tdu import Imu
 from beta_function import beta_function
 
 # Thread Lock
@@ -57,7 +56,7 @@ class readImuLoop(threading.Thread):
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
             
-            # Get the IMUs rotation matrices
+            # Get the IMU rotation matrix
             try:
                 IMU_mat = get_latest_imu_matrix()
             except Exception as e:
@@ -268,6 +267,7 @@ def main():
 
     for t in threads:
         t.start()
+        
     try:
         while not emergency_stop.is_set():
             time.sleep(0.1)
