@@ -144,7 +144,7 @@ class handleEvents(threading.Thread):
                 print(f"New pre-calibration angle (deg): {new_precal_deg:.2f}")
                 new_precal_rad = np.radians(new_precal_deg)
                 with lock:
-                    self.system_state.precalibration_angle = new_precal_rad
+                    self.system_state.precalibration_angle = self.system_state.precalibration_angle + new_precal_rad
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
