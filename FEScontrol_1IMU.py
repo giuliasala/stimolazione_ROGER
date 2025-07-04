@@ -22,6 +22,7 @@ class systemState():
     curr_max_sh_el = 0
     stim_current = 0
     sh_el_error = 0
+    precalibration_angle = 0
 
 def get_latest_imu_matrix():
     shm = shared_memory.SharedMemory(name='imu_matrix')
@@ -42,7 +43,8 @@ class readImuLoop(threading.Thread):
         self.system_state = system_state
         self.imu_fs = 200
         self.filename = filename
-        self.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
+        with lock:
+            self.system_state.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
 
         self.emergency_stop = emergency_stop
 
@@ -64,7 +66,7 @@ class readImuLoop(threading.Thread):
                 pass
             
             old_sh_el_deg = self.system_state.sh_el_deg
-            sh_el = compute_joint_angles(IMU_mat) - self.precalibration_angle
+            sh_el = compute_joint_angles(IMU_mat) - self.system_state.precalibration_angle
             sh_el_deg = np.degrees(sh_el)
             curr_max_sh_el = max(self.system_state.curr_max_sh_el, sh_el_deg)
             
@@ -124,6 +126,19 @@ class handleEvents(threading.Thread):
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
                     self.system_state.curr_max_sh_el = 0
+
+                # After each repetition, set a new 0 to avoid IMU drifting
+                duration = 1
+                print(f"Pre-calibration: Please stay still for {duration} seconds...")
+                anti_drift_array = []
+                start_time = time.time()
+                while time.time() -start_time < duration and not self.emergency_stop.is_set():
+                    anti_drift_array.append(self.system_state.sh_el_deg)
+                new_precal_deg = np.median(anti_drift_array)
+                print(f"New pre-calibration angle (deg): {new_precal_deg:.2f}")
+                new_precal_rad = np.radians(new_precal_deg)
+                with lock:
+                    self.system_state.precalibration_angle = new_precal_rad
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 

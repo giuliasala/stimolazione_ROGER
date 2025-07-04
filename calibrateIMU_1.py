@@ -23,7 +23,7 @@ def compute_joint_angles(UA_mat):
     return sh_el
 
 class readImuLoop(threading.Thread):
-    def __init__(self, name, imu, filename):
+    def __init__(self, name, imu, filename, pre_calibration_only=False):
         threading.Thread.__init__(self)
         self.name = name
         self.imu = imu
@@ -32,6 +32,7 @@ class readImuLoop(threading.Thread):
         self.filename = filename
         self.duration = 4 # of the movement
         self.pre_duration = 3 # for pre-calibration
+        self.pre_calibration_only = pre_calibration_only
 
         self.initial_sh_el_array = []
         self.initial_sh_el = 0
@@ -81,9 +82,12 @@ class readImuLoop(threading.Thread):
             return
         utils.save_to_json(self.filename, round(self.initial_sh_el, 3), "precalibration_angle (rad)")
 
+        if self.pre_calibration_only:
+            return
+
         # 3 ripetizioni per estrarre l'angolo massimo raggiungibile e durata del movimento
         for rep in range(3):
-            print(f"Rep {rep+1}")
+            input(f"\nReady to start repetition {rep + 1}? Press Enter to continue...")
             self.max_sh_el = 0
             angle_trace = []  # List to store (timestamp, angle_deg)
             last_sh_el = None
@@ -154,5 +158,8 @@ if __name__ == "__main__":
         print("Invalid input. Exiting.")
         exit()
 
-    readImuThread = readImuLoop("Read IMU", imu, filename)    
+    mode = input("Do you want to run full calibration (f) or anti-drift only (p)? ").lower().strip()
+    anti_drift = (mode == "p")
+
+    readImuThread = readImuLoop("Read IMU", imu, filename, pre_calibration_only=anti_drift)    
     readImuThread.start()

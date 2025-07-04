@@ -24,6 +24,8 @@ class systemState():
     curr_max_sh_el = 0
     stim_current = 0
     sh_el_error = 0
+    precalibration_angle = 0
+    contra_precalibration_angle = 0
 
 def get_latest_imu_matrix(name):
     shm = shared_memory.SharedMemory(name)
@@ -45,8 +47,9 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.filename = filename
         self.contralateral = contralateral
-        self.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
-        self.contralateral_precalibration_angle = utils.load_from_json(self.filename, "contralateral_precalibration_angle (rad)")
+        with lock:
+            self.system_state.precalibration_angle = utils.load_from_json(self.filename, "precalibration_angle (rad)")
+            self.system_state.contra_precalibration_angle = utils.load_from_json(self.filename, "contralateral_precalibration_angle (rad)")
 
         self.emergency_stop = emergency_stop
 
@@ -67,7 +70,7 @@ class readImuLoop(threading.Thread):
                     print("IMU read error:", e)
                     pass
                 old_sh_el_deg = self.system_state.sh_el_deg
-                sh_el = compute_joint_angles(IMU_mat) - self.precalibration_angle
+                sh_el = compute_joint_angles(IMU_mat) - self.system_state.precalibration_angle
                 sh_el_deg = np.degrees(sh_el)
                 curr_max_sh_el = max(self.system_state.curr_max_sh_el, sh_el_deg)
                 
@@ -85,7 +88,7 @@ class readImuLoop(threading.Thread):
                     print("IMU read error:", e)
                     pass
                 old_contr_sh_el_deg = self.system_state.contralateral_sh_el_deg
-                contralateral_sh_el = compute_joint_angles(IMU_mat) - self.contralateral_precalibration_angle
+                contralateral_sh_el = compute_joint_angles(IMU_mat) - self.system_state.contra_precalibration_angle
                 contralateral_sh_el_deg = np.degrees(contralateral_sh_el)
                 with lock:
                     self.system_state.contralateral_sh_el_deg = contralateral_sh_el_deg
@@ -146,6 +149,26 @@ class handleEvents(threading.Thread):
                     if not arms_lowered:
                         print("Both arms lowered, ready for new stimulation.")
                     arms_lowered = True
+
+                    # After each repetition, set a new 0 to avoid IMU drifting
+                    duration = 1
+                    print(f"Pre-calibration: Please stay still for {duration} seconds...")
+                    anti_drift_array = []
+                    anti_drift_array_contra = []
+                    start_time = time.time()
+                    while time.time() -start_time < duration and not self.emergency_stop.is_set():
+                        anti_drift_array.append(self.system_state.sh_el_deg)
+                        anti_drift_array_contra.append(self.system_state.contralateral_sh_el_deg)
+                    new_precal_deg = np.median(anti_drift_array)
+                    contra_new_precal_deg = np.median(anti_drift_array_contra)
+                    print("New pre-calibration angles (deg):")
+                    print(f"\nImpaired arm: {new_precal_deg:.2f}")
+                    print(f"\nContralateral arm: {contra_new_precal_deg:.2f}")
+                    new_precal_rad = np.radians(new_precal_deg)
+                    contra_new_precal_rad = np.radians(contra_new_precal_deg)
+                    with lock:
+                        self.system_state.precalibration_angle = new_precal_rad
+                        self.system_state.contra_precalibration_angle = contra_new_precal_rad
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
