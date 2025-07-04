@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import numpy as np
 from shared_memory import shared_memory  # for Python 3.7
+import atexit
 
 from rehamove import *
 
@@ -13,6 +14,9 @@ from beta_function import beta_function
 
 # Thread Lock
 lock = threading.Lock()
+
+# Shared memory for IMU reading
+_shm = {}
 
 class systemState():
     UA_mat = np.matrix([[1,0,0],[0,1,0],[0,0,1]])
@@ -28,10 +32,13 @@ class systemState():
     contra_precalibration_angle = 0
 
 def get_latest_imu_matrix(name):
-    shm = shared_memory.SharedMemory(name)
-    np_array = np.ndarray((9,), dtype=np.float64, buffer=shm.buf)
+    if name not in _shm:
+        shm = shared_memory.SharedMemory(name)
+        np_array = np.ndarray((9,), dtype=np.float64, buffer=shm.buf)
+        _shm[name] = (shm, np_array)
+        atexit.register(shm.close)
+    shm, np_array = _shm[name]
     mat = np_array.copy()  # Copy to avoid race conditions
-    shm.close()
     return mat.reshape((3,3))
 
 def compute_joint_angles(UA_mat):

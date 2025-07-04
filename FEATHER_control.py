@@ -22,6 +22,7 @@ import time
 import warnings
 import os
 from shared_memory import shared_memory  # for Python 3.7
+import atexit
 
 from datetime import datetime
 
@@ -111,7 +112,7 @@ else:
 
 print(sh_friction_pp)
 
-# Imu instance is created in IMU_forwarder.py (for 1 IMU only, shoulder)
+# Imu instance is created in IMU_forwarder.py (for shoulder IMU only)
 '''
 # IMU parameters from NGIMU GUI - The first is the upper arm, the second is the forearm
 IMU_AXIS_UP = 'Y'
@@ -123,6 +124,9 @@ IMU_IP_ADDRESSES = ["192.168.1.1","192.168.0.102"] # in AP mode only for IMU 1
 
 # Thread Lock
 lock = threading.Lock()
+
+# Shared memory for IMU reading
+_shm = None
 
 class systemState():
     v_bat = 0
@@ -184,10 +188,12 @@ class kalmanFilter():
         return self.x[0], self.x[1]
 
 def get_latest_imu_matrix():
-    shm = shared_memory.SharedMemory(name='imu_matrix')
-    np_array = np.ndarray((9,), dtype=np.float64, buffer=shm.buf)
-    mat = np_array.copy()
-    shm.close()
+    global _shm
+    if _shm is None:
+        _shm = shared_memory.SharedMemory(name='imu_matrix')
+        atexit.register(_shm.close)
+    np_array = np.ndarray((9,), dtype=np.float64, buffer=_shm.buf)
+    mat = np_array.copy()  # Copy to avoid race conditions
     return mat.reshape((3,3))
 
 def compute_joint_angles(UA_mat,FA_mat): #TO DO: make possible to choose between simple and complex
