@@ -269,7 +269,7 @@ def main():
     max_reached = threading.Event()
     emergency_stop = threading.Event()
     
-    readImuThread = readImuLoop("Read IMU", system_state, emergency_stop, filename, start_event, max_reached)
+    readImuThread = readImuLoop("Read IMU", system_state, emergency_stop, filename)
     handleEventsThread = handleEvents("Events", system_state, emergency_stop, filename, start_event, max_reached)
     stimulationThread = FESControl("Stimulation", system_state, emergency_stop, port_name, channel, filename, start_event, max_reached)
     saveDataThread = saveDataLoop("Save data", system_state, emergency_stop, user, muscle)
