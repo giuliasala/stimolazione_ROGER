@@ -625,8 +625,8 @@ class computeAssistance(threading.Thread):
                 self.system_state.el_force_des = el_force_des
      
             counter = counter+1
-            if counter%100==0:
-                print("Shoulder elevation: ",sh_el_cur*180/np.pi)
+            #if counter%100==0:
+                #print("Shoulder elevation: ",sh_el_cur*180/np.pi)
                 #print("Elbow flexion: ",el_fe_cur*180/np.pi)
                 #print("Humeral rotation: ",sh_hr_cur)
                 #print("Shoulder force: ", sh_force_des)
