@@ -216,7 +216,7 @@ class FESControl(threading.Thread):
             current = self.min_current
 
             sh_el_error = self.system_state.sh_el_error
-            self.max_current = self.max_current + 0.05 * sh_el_error
+            self.max_current = self.max_current + 0.1 * sh_el_error
             self.max_current = round(self.max_current*2) / 2
             if self.max_current > self.pain_current:
                 self.max_current = self.pain_current - 0.5
@@ -288,8 +288,8 @@ class saveDataLoop(threading.Thread):
                 time.sleep(max(next_time_instant-time.perf_counter(),0))
 
 def main():
-    port_name = "COM9" # Windows
-    #port_name = "/dev/ttyUSB0" # Linux
+    #port_name = "COM9" # Windows
+    port_name = "/dev/ttyUSB0" # Linux
     
     user = input("Your name: ").lower().strip()
     muscle = input("Do you want to stimulate anterior(a) or middle(m) deltoid? ").lower().strip()
