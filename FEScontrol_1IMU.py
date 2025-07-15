@@ -141,10 +141,10 @@ class handleEvents(threading.Thread):
                 while time.time() -start_time < duration and not self.emergency_stop.is_set():
                     anti_drift_array.append(self.system_state.sh_el_deg)
                 new_precal_deg = np.median(anti_drift_array)
-                print(f"New pre-calibration angle (deg): {new_precal_deg:.2f}")
                 new_precal_rad = np.radians(new_precal_deg)
                 with lock:
                     self.system_state.precalibration_angle = self.system_state.precalibration_angle + new_precal_rad
+                print(f"New pre-calibration angle (deg): {np.degrees(self.system_state.precalibration_angle):.2f}")
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 

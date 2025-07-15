@@ -168,14 +168,14 @@ class handleEvents(threading.Thread):
                         anti_drift_array_contra.append(self.system_state.contralateral_sh_el_deg)
                     new_precal_deg = np.median(anti_drift_array)
                     contra_new_precal_deg = np.median(anti_drift_array_contra)
-                    print("New pre-calibration angles (deg):")
-                    print(f"\nImpaired arm: {new_precal_deg:.2f}")
-                    print(f"\nContralateral arm: {contra_new_precal_deg:.2f}")
                     new_precal_rad = np.radians(new_precal_deg)
                     contra_new_precal_rad = np.radians(contra_new_precal_deg)
                     with lock:
-                        self.system_state.precalibration_angle = new_precal_rad
+                        self.system_state.precalibration_angle = self.system_state.precalibration_angle + new_precal_rad
                         self.system_state.contra_precalibration_angle = contra_new_precal_rad
+                    print("New pre-calibration angles (deg):")
+                    print(f"\nImpaired arm: {np.degrees(self.system_state.precalibration_angle):.2f}")
+                    print(f"\nContralateral arm: {np.degrees(self.system_state.contra_precalibration_angle):.2f}")
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
