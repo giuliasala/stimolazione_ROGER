@@ -38,10 +38,12 @@ except KeyboardInterrupt:
 finally:
     try:
         shm.close()
+        shm_contra.close()
     except Exception as e:
         print("Shared memory close failed:", e)
     try:
         shm.unlink()
+        shm_contra.unlink()
     except Exception as e:
         print("Shared memory unlink error:", e)
     except FileNotFoundError:
