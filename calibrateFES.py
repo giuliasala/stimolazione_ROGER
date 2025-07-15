@@ -79,7 +79,7 @@ def calibrate_rehamove(port_name, channel, filename):
             # Set parameters
             pw = 400     # us
             current = 0     # mA
-            max_current = 35
+            max_current = 50
 
             thresholds = {
                 'tingling_current': None,

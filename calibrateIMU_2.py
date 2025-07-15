@@ -30,7 +30,7 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.dt = 1.0 / self.imu_fs
         self.filename = filename
-        self.duration = 4 # of the movement
+        self.duration = 6 # of the movement
         self.pre_duration = 3 # for pre-calibration
         self.contralateral = contralateral
         self.pre_calibration_only = pre_calibration_only
@@ -52,7 +52,7 @@ class readImuLoop(threading.Thread):
             return None
     
     def pre_calibrate(self):
-        time.sleep(2) # temporary, to let me adjust when doing trials
+        #time.sleep(2) # temporary, to let me adjust when doing trials
         print(f"Starting pre-calibration. Please stay still for {self.pre_duration} seconds...")
         start_time = time.time()
 

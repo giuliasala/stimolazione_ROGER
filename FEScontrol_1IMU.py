@@ -185,7 +185,7 @@ class FESControl(threading.Thread):
             current = self.min_current
 
             sh_el_error = self.system_state.sh_el_error
-            self.max_current = self.max_current + 0.05 * sh_el_error
+            self.max_current = self.max_current + 0.10 * sh_el_error
             self.max_current = round(self.max_current*2) / 2
             if self.max_current > self.pain_current:
                 self.max_current = self.pain_current - 0.5
@@ -195,7 +195,7 @@ class FESControl(threading.Thread):
             start_time = time.perf_counter()
             t = 0
 
-            while not self.emergency_stop.is_set() and current <= self.max_current and t < (self.movement_duration - self.delta_t):
+            while not self.emergency_stop.is_set() and current <= self.max_current and t < (self.movement_duration):
                 next_time_instant = time.perf_counter() + self.period_s
                 t = time.perf_counter() - start_time
                 print("time t:", t)

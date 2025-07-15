@@ -20,7 +20,7 @@ def start_processes(cmds):
             procs.append(subprocess.Popen(cmd))
             if i == 0:
                 time.sleep(1)  # Give IMU forwarder time to start
-        print("All programs started. Press Ctrl+C to stop all.")
+        print("Starting all programs. Press Ctrl+C to stop all.")
         while True:
             time.sleep(1)
     except KeyboardInterrupt:

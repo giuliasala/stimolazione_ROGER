@@ -30,7 +30,7 @@ class readImuLoop(threading.Thread):
         self.imu_fs = 200 # Need to read faster than IMU update frequency
         self.dt = 1.0 / self.imu_fs
         self.filename = filename
-        self.duration = 4 # of the movement
+        self.duration = 6 # of the movement
         self.pre_duration = 3 # for pre-calibration
         self.pre_calibration_only = pre_calibration_only
 
@@ -51,10 +51,10 @@ class readImuLoop(threading.Thread):
             return None
     
     def pre_calibrate(self):
-        print(f"Starting pre-calibration. Please stay still for {self.duration} seconds...")
+        print(f"Starting pre-calibration. Please stay still for {self.pre_duration} seconds...")
         start_time = time.time()
 
-        while time.time() - start_time < self.duration:
+        while time.time() - start_time < self.pre_duration:
             next_time_instant = time.perf_counter() + self.dt
             
             IMU_mat = self.read_imu_matrix()
@@ -118,7 +118,7 @@ class readImuLoop(threading.Thread):
             self.max_sh_el_array.append(max_sh_el_deg)
 
             # Find movement start and end times
-            vel_threshold = 100     # deg/s
+            vel_threshold = 40     # deg/s
             vel_tolerance = 10
             movement_start = None
             movement_end = None
