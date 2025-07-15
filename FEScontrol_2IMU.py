@@ -120,12 +120,12 @@ class handleEvents(threading.Thread):
 
     def run(self):
         dt = 1.0 / self.fs
-        arms_lowered = False
+        arms_lowered = True
 
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
             
-            print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, start_event: {self.start_event.is_set()}, arm_lowered: {arms_lowered}, max_reached: {self.max_reached.is_set()}")
+            print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, contra_sh_el_deg: {self.system_state.contralateral_sh_el_deg:.2f} start_event: {self.start_event.is_set()}, arm_lowered: {arms_lowered}, max_reached: {self.max_reached.is_set()}")
             
             # For system control, record events to control stimulation
             # Trigger start event when the angle of contralateral arm exceeds the angle of the impaired arm (and a given threshold) and it's rising
@@ -141,41 +141,40 @@ class handleEvents(threading.Thread):
             # Don't make sure that impaired arm is below threshold, because pre-tension of ROGER always keeps the arm above it -> need to also 
             # make sure that contralateral arm is below ipsilateral arm
             if (self.system_state.contralateral_sh_el_deg < self.min_sh_el and
-                self.system_state.contralateral_sh_el_deg <= self.system_state.sh_el_deg):
+                self.system_state.contralateral_sh_el_deg <= self.system_state.old_contr_sh_el_deg and 
+                self.system_state.contralateral_sh_el_deg <= self.system_state.sh_el_deg and
+                self.max_reached.is_set()):
+                print(f"Arms have lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")                
+                
+                arms_lowered = True             
+                self.max_reached.clear()
+                   
+                iteration_max_sh_el = self.system_state.curr_max_sh_el 
+                sh_el_error = self.sh_el_ref - iteration_max_sh_el
+                with lock:
+                    self.system_state.sh_el_error = sh_el_error
+                    self.system_state.curr_max_sh_el = 0
 
-                if self.max_reached.is_set():
-                    print(f"Assisted arm has lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")
-                    iteration_max_sh_el = self.system_state.curr_max_sh_el 
-                    sh_el_error = self.sh_el_ref - iteration_max_sh_el
-                    with lock:
-                        self.system_state.sh_el_error = sh_el_error
-                        self.system_state.curr_max_sh_el = 0             
-                    self.max_reached.clear()
-               
-                if not self.start_event.is_set():
-                    if not arms_lowered:
-                        print("Both arms lowered, ready for new stimulation.")
-                    arms_lowered = True
-
-                    # After each repetition, set a new 0 to avoid IMU drifting
-                    duration = 1
-                    print(f"Pre-calibration: Please stay still for {duration} seconds...")
-                    anti_drift_array = []
-                    anti_drift_array_contra = []
-                    start_time = time.time()
-                    while time.time() -start_time < duration and not self.emergency_stop.is_set():
-                        anti_drift_array.append(self.system_state.sh_el_deg)
-                        anti_drift_array_contra.append(self.system_state.contralateral_sh_el_deg)
-                    new_precal_deg = np.median(anti_drift_array)
-                    contra_new_precal_deg = np.median(anti_drift_array_contra)
-                    new_precal_rad = np.radians(new_precal_deg)
-                    contra_new_precal_rad = np.radians(contra_new_precal_deg)
-                    with lock:
-                        self.system_state.precalibration_angle = self.system_state.precalibration_angle + new_precal_rad
-                        self.system_state.contra_precalibration_angle = contra_new_precal_rad
-                    print("New pre-calibration angles (deg):")
-                    print(f"\nImpaired arm: {np.degrees(self.system_state.precalibration_angle):.2f}")
-                    print(f"\nContralateral arm: {np.degrees(self.system_state.contra_precalibration_angle):.2f}")
+                # After each repetition, set a new 0 to avoid IMU drifting
+                duration = 1
+                time.sleep(1)
+                print(f"Pre-calibration: Please stay still for {duration} seconds...")
+                anti_drift_array = []
+                anti_drift_array_contra = []
+                start_time = time.time()
+                while time.time() -start_time < duration and not self.emergency_stop.is_set():
+                    anti_drift_array.append(self.system_state.sh_el_deg)
+                    anti_drift_array_contra.append(self.system_state.contralateral_sh_el_deg)
+                new_precal_deg = np.median(anti_drift_array)
+                contra_new_precal_deg = np.median(anti_drift_array_contra)
+                new_precal_rad = np.radians(new_precal_deg)
+                contra_new_precal_rad = np.radians(contra_new_precal_deg)
+                with lock:
+                    self.system_state.precalibration_angle = self.system_state.precalibration_angle + new_precal_rad
+                    self.system_state.contra_precalibration_angle = self.system_state.contra_precalibration_angle + contra_new_precal_rad
+                print("New pre-calibration angles (deg):")
+                print(f"\nImpaired arm: {np.degrees(self.system_state.precalibration_angle):.2f}")
+                print(f"\nContralateral arm: {np.degrees(self.system_state.contra_precalibration_angle):.2f}")
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
