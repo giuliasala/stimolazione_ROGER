@@ -125,7 +125,7 @@ class handleEvents(threading.Thread):
         while not self.emergency_stop.is_set():
             next_time_instant = time.perf_counter() + dt
             
-            print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, contra_sh_el_deg: {self.system_state.contralateral_sh_el_deg:.2f} start_event: {self.start_event.is_set()}, arm_lowered: {arms_lowered}, max_reached: {self.max_reached.is_set()}")
+            #print(f"[DEBUG] sh_el_deg: {self.system_state.sh_el_deg:.2f}, contra_sh_el_deg: {self.system_state.contralateral_sh_el_deg:.2f} start_event: {self.start_event.is_set()}, arm_lowered: {arms_lowered}, max_reached: {self.max_reached.is_set()}")
             
             # For system control, record events to control stimulation
             # Trigger start event when the angle of contralateral arm exceeds the angle of the impaired arm (and a given threshold) and it's rising
@@ -144,12 +144,12 @@ class handleEvents(threading.Thread):
                 self.system_state.contralateral_sh_el_deg <= self.system_state.old_contr_sh_el_deg and 
                 self.system_state.contralateral_sh_el_deg <= self.system_state.sh_el_deg and
                 self.max_reached.is_set()):
-                print(f"Arms have lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")                
-                
+
                 arms_lowered = True             
                 self.max_reached.clear()
                    
                 iteration_max_sh_el = self.system_state.curr_max_sh_el 
+                print(f"Arms have lowered. Max angle for iteration: {iteration_max_sh_el:.2f}°")
                 sh_el_error = self.sh_el_ref - iteration_max_sh_el
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
@@ -172,9 +172,21 @@ class handleEvents(threading.Thread):
                 with lock:
                     self.system_state.precalibration_angle = self.system_state.precalibration_angle + new_precal_rad
                     self.system_state.contra_precalibration_angle = self.system_state.contra_precalibration_angle + contra_new_precal_rad
+                updated_precal_deg = np.degrees(self.system_state.precalibration_angle)
+                contra_updated_precal_deg = np.degrees(self.system_state.contra_precalibration_angle)
                 print("New pre-calibration angles (deg):")
-                print(f"\nImpaired arm: {np.degrees(self.system_state.precalibration_angle):.2f}")
-                print(f"\nContralateral arm: {np.degrees(self.system_state.contra_precalibration_angle):.2f}")
+                print(f"\nImpaired arm: {updated_precal_deg:.2f}")
+                print(f"\nContralateral arm: {contra_updated_precal_deg:.2f}")
+
+                # save iteration angle data to a csv
+                filename = "2IMU_iterations_log.csv"
+                iteration_data = {
+                    "max_sh_el (deg)": iteration_max_sh_el,
+                    "sh_el_error (deg)": sh_el_error,
+                    "new_precal_angle (deg)": updated_precal_deg,
+                    "contra_new_precal_angle (deg)": contra_updated_precal_deg
+                }
+                utils.save_to_csv(filename, iteration_data)
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -260,7 +272,7 @@ class saveDataLoop(threading.Thread):
         self.sys_state = sys_state
         self.user = user
         self.muscle = muscle.upper()
-        self.date = datetime.now().strftime("%m%d_%H%M%S")
+        self.date = datetime.now().strftime("%m%d_%H%M")
         self.save_fs = 100
 
         self.emergency_stop = emergency_stop
@@ -269,8 +281,8 @@ class saveDataLoop(threading.Thread):
         dt = 1.0 / self.save_fs
         t0 = time.perf_counter()
 
-        #filename = f"log_{self.user}_{self.muscle}{self.date}.csv" # for tests
-        filename = "log.csv" # for development
+        filename = f"log_{self.user}_{self.muscle}_{self.date}.csv" # for tests
+        #filename = "log.csv" # for development
         with open(filename, 'w') as log:
         
             file_header = "time,contralateral_sh_el_deg,sh_el_deg,stim_curr\n"

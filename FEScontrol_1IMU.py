@@ -2,7 +2,7 @@
 
 import threading
 import time
-import datetime
+from datetime import datetime
 import numpy as np
 from shared_memory import shared_memory  # for Python 3.7
 import atexit
@@ -122,12 +122,12 @@ class handleEvents(threading.Thread):
             if (self.system_state.sh_el_deg < self.min_sh_el and 
                 self.system_state.sh_el_deg < self.system_state.old_sh_el_deg and
                 self.max_reached.is_set()):
-                print(f"Arm has lowered. Max angle for iteration: {self.system_state.curr_max_sh_el:.2f}°")
 
                 arm_lowered = True                
                 self.max_reached.clear()
 
                 iteration_max_sh_el = self.system_state.curr_max_sh_el 
+                print(f"Arm has lowered. Max angle for iteration: {iteration_max_sh_el:.2f}°") 
                 sh_el_error = self.sh_el_ref - iteration_max_sh_el
                 with lock:
                     self.system_state.sh_el_error = sh_el_error
@@ -144,7 +144,17 @@ class handleEvents(threading.Thread):
                 new_precal_rad = np.radians(new_precal_deg)
                 with lock:
                     self.system_state.precalibration_angle = self.system_state.precalibration_angle + new_precal_rad
-                print(f"New pre-calibration angle (deg): {np.degrees(self.system_state.precalibration_angle):.2f}")
+                updated_precal_deg = np.degrees(self.system_state.precalibration_angle)
+                print(f"New pre-calibration angle (deg): {updated_precal_deg:.2f}")
+
+                # save iteration angle data to a csv
+                filename = "1IMU_iterations_log.csv"
+                iteration_data = {
+                    "max_sh_el (deg)": iteration_max_sh_el,
+                    "sh_el_error (deg)": sh_el_error,
+                    "new_precal_angle (deg)": updated_precal_deg
+                }
+                utils.save_to_csv(filename, iteration_data)
 
             time.sleep(max(next_time_instant - time.perf_counter(), 0))
 
@@ -230,7 +240,7 @@ class saveDataLoop(threading.Thread):
         self.sys_state = sys_state
         self.user = user
         self.muscle = muscle.upper()
-        self.date = datetime.datetime.now().strftime("%d%m")
+        self.date = datetime.now().strftime("%d%m_%H%M")
         self.save_fs = 100
 
         self.emergency_stop = emergency_stop
@@ -239,8 +249,8 @@ class saveDataLoop(threading.Thread):
         dt = 1.0 / self.save_fs
         t0 = time.perf_counter()
 
-        #filename = f"log_{self.user}_{self.muscle}{self.date}.csv" # for tests
-        filename = "log.csv" # for development
+        filename = f"log_{self.user}_{self.muscle}_{self.date}.csv" # for tests
+        #filename = "log.csv" # for development
         with open(filename, 'w') as log:
         
             file_header = "time,old_sh_el_deg,sh_el_deg,stim_curr\n"

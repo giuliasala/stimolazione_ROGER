@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import json
+import csv
 import os
 
 def save_to_json(filename, new_data, key=None):
@@ -40,3 +41,20 @@ def load_from_json(filename, key):
     except Exception as e:
         print(f"Error loading calibration data: {e}")
         return 0
+    
+def save_to_csv(filename, new_data):
+    if not isinstance(new_data, dict):
+        raise ValueError("new_data must be a dictionary")
+
+    file_exists = os.path.isfile(filename)
+    # Use keys from data
+    fieldnames = list(new_data.keys())
+
+    with open(filename, mode='a', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        # Write header if file does not exist
+        if not file_exists:
+            writer.writeheader()
+
+        writer.writerow(new_data)
