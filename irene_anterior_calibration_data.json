@@ -5,7 +5,7 @@
     "full_range_current": 14.5,
     "pain_current": 13.0,
     "precalibration_angle (rad)": 0.132,
-	"max_angle (deg)": 87.998,
-    "movement_duration": 3.5,
-    "mean_velocity": 25.143
+    "max_angle (deg)": 87.998,
+    "movement_duration": 2.5,
+    "mean_velocity": 35.199
 }
