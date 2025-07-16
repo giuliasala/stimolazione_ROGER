@@ -109,7 +109,7 @@ class readImuLoop(threading.Thread):
 
                     if last_sh_el is not None:
                         velocity = (sh_el_deg - last_sh_el) / self.dt
-                        print(f"Velocity:{velocity:.2f} deg/s")
+                        #print(f"Velocity:{velocity:.2f} deg/s")
                     last_sh_el = sh_el_deg
 
                     angle_trace.append((time.time(), sh_el_deg, velocity))

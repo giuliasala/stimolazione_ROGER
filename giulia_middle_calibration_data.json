@@ -1,11 +1,11 @@
 {
-    "contralateral_precalibration_angle (rad)": 0.256,
-    "max_angle (deg)": 74.898,
-    "tingling_current": 2.0,
-    "movement_current": 9.5,
-    "full_range_current": 18.0,
-    "pain_current": 18.5,
-    "precalibration_angle (rad)": 0.129,
-    "movement_duration": 1.846,
-    "mean_velocity": 40.566
+    "contralateral_precalibration_angle (rad)": 0.195,
+    "max_angle (deg)": 77.904,
+    "tingling_current": 2.5,
+    "movement_current": 10.5,
+    "full_range_current": 17.5,
+    "pain_current": 18.0,
+    "precalibration_angle (rad)": 0.093,
+    "movement_duration": 3.187,
+    "mean_velocity": 41.021
 }

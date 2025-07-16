@@ -307,7 +307,7 @@ def main():
    
     if muscle == "a":
         filename = f"{user}_anterior_calibration_data.json"
-        channel = "white"
+        channel = "red"
     elif muscle == "m":
         filename = f"{user}_middle_calibration_data.json"
         channel = "blue"

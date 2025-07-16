@@ -683,10 +683,10 @@ class saveDataLoop(threading.Thread):
         t0 = time.perf_counter()
 
         # Nice to have time-stamped log file if running experiments...
-        #F_OUT = open('logs/'+datetime.now().strftime("%Y-%m-%d_%H-%M-%S_") + 'log.csv', 'w')
+        F_OUT = open('logs/'+datetime.now().strftime("%Y-%m-%d_%H-%M-%S_") + 'log.csv', 'w')
 
         # But for debugging / development, have a simple filename to overwrite each time.
-        F_OUT = open('logs/log.csv', 'w')
+        #F_OUT = open('logs/log.csv', 'w')
         
         file_header = "t,v_battery," # TDU vitals
         file_header = file_header + "kp_m1,kd_m1,p_des_m1,v_des_m1,t_des_m1," # Motor1 desired state
