@@ -137,9 +137,8 @@ class handleEvents(threading.Thread):
                 self.start_event.set()
                 arms_lowered = False
             
-            # Make sure that, before triggering a new start, contralateral arm is below threshold
-            # Don't make sure that impaired arm is below threshold, because pre-tension of ROGER always keeps the arm above it -> need to also 
-            # make sure that contralateral arm is below ipsilateral arm
+            # Make sure that, before triggering a new start, contralateral arm is below threshold (and lowering)
+            # Don't make sure that impaired arm is below threshold, because pre-tension of ROGER always keeps the arm above it
             if (self.system_state.contralateral_sh_el_deg < self.min_sh_el and
                 self.system_state.contralateral_sh_el_deg <= self.system_state.old_contr_sh_el_deg and 
                 self.system_state.contralateral_sh_el_deg <= self.system_state.sh_el_deg and
@@ -177,9 +176,10 @@ class handleEvents(threading.Thread):
                 print("New pre-calibration angles (deg):")
                 print(f"\nImpaired arm: {updated_precal_deg:.2f}")
                 print(f"\nContralateral arm: {contra_updated_precal_deg:.2f}")
-
+                
+                date = datetime.now().strftime("%m%d_%H%M%S")
                 # save iteration angle data to a csv
-                filename = "2IMU_iterations_log.csv"
+                filename = f"2IMU_iterations_log_{date}.csv"
                 iteration_data = {
                     "max_sh_el (deg)": iteration_max_sh_el,
                     "sh_el_error (deg)": sh_el_error,
