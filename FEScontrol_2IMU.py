@@ -157,7 +157,7 @@ class handleEvents(threading.Thread):
 
                 # After each repetition, set a new 0 to avoid IMU drifting
                 duration = 1
-                time.sleep(1)
+                time.sleep(1.5)
                 print(f"Pre-calibration: Please stay still for {duration} seconds...")
                 anti_drift_array = []
                 anti_drift_array_contra = []
@@ -240,7 +240,7 @@ class FESControl(threading.Thread):
             while not self.emergency_stop.is_set() and current <= self.max_current and t < (self.movement_duration - self.delta_t):
                 next_time_instant = time.perf_counter() + self.period_s
                 t = time.perf_counter() - start_time
-                print("time t:", t)
+                #print("time t:", t)
                 if t <= self.T:     # beta function with duration T = movement duration - 2*time it takes to get to 10°
                     i = beta_function(self.min_current, self.max_current, self.T ,t) # theoretical current (continuous function)
                     current = round(i * 2 + 1e-9) / 2 # Add a small bias to ensure rounding up for ties

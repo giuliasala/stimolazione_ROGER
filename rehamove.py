@@ -76,7 +76,7 @@ class Rehamove:
 			print("python Rehamove pulse() ERROR!")
 			return -1
 		else:
-			print("python Rehamove pulse() sent.")
+			#print("python Rehamove pulse() sent.")
 			return 0
 
 	def custom_pulse(self, channel, points_array):
