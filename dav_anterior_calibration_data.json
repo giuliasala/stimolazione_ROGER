@@ -1,0 +1,11 @@
+{
+    "tingling_current": 3.5,
+    "movement_current": 10.5,
+    "full_range_current": 28.5,
+    "pain_current": 29.0,
+    "precalibration_angle (rad)": 0.304,
+    "contralateral_precalibration_angle (rad)": 0.129,
+    "max_angle (deg)": 75.495,
+    "movement_duration": 2.5,
+    "mean_velocity": 30.198
+}
