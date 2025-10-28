@@ -135,6 +135,7 @@ class handleEvents(threading.Thread):
 
                 # After each repetition, set a new 0 to avoid IMU drifting
                 duration = 1
+                time.sleep(1.5)
                 print(f"Pre-calibration: Please stay still for {duration} seconds...")
                 anti_drift_array = []
                 start_time = time.time()
@@ -275,7 +276,7 @@ def main():
    
     if muscle == "a":
         filename = f"{user}_anterior_calibration_data.json"
-        channel = "white"
+        channel = "red"
     elif muscle == "m":
         filename = f"{user}_middle_calibration_data.json"
         channel = "blue"
