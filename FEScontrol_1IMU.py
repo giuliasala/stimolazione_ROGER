@@ -94,7 +94,8 @@ class handleEvents(threading.Thread):
         self.fs = 250
 
         self.min_sh_el = 10
-        self.sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
+        sh_el_ref = utils.load_from_json(self.filename, "max_angle (deg)")
+        self.sh_el_ref = sh_el_ref + 30
         self.start_event = start_event
         self.max_reached = max_reached
 
@@ -179,7 +180,8 @@ class FESControl(threading.Thread):
         self.movement_duration = utils.load_from_json(self.filename, "movement_duration")
         mean_velocity = utils.load_from_json(self.filename, "mean_velocity")
         self.delta_t = 10 / mean_velocity
-        self.T = self.movement_duration - 2 * self.delta_t
+        T = self.movement_duration - 2 * self.delta_t
+        self.T = T + 30 / mean_velocity
         
         self.emergency_stop = emergency_stop
 
