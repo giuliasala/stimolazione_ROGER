@@ -261,7 +261,7 @@ def compute_gravity_assistance(UA_mat,FA_mat,sh_el,el_fe,sh_hr,el_fe_dot):
     alpha = np.arccos(num / den)   
     
     # Desired shoulder tendon tension
-    sh_el_thr = np.pi/4
+    sh_el_thr = np.pi/6
     sh_T_tendon_steepness = 2
     sh_T_tendon = sh_tau_req / (w * np.sin(alpha))
     sh_T_tendon = sh_T_tendon * (np.tanh((sh_el-sh_el_thr)*sh_T_tendon_steepness)+1)/2

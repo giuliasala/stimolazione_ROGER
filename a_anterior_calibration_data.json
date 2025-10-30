@@ -1,0 +1,9 @@
+{
+    "movement_current": 29.0,
+    "full_range_current": 34.0,
+    "pain_current": 34.5,
+	"precalibration_angle (rad)": 0.339,
+    "max_angle (deg)": 34.166,
+    "movement_duration": 2.048,
+    "mean_velocity": 16.684
+}
